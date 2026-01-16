@@ -2,14 +2,16 @@ import { Activity, Settings, Wifi, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { BotStats, BotConfig } from '@/types/trading';
 import { cn } from '@/lib/utils';
+import { ReactNode } from 'react';
 
 interface HeaderProps {
   stats: BotStats;
   config: BotConfig;
   onToggleBot: () => void;
+  connectionStatus?: ReactNode;
 }
 
-export const Header = ({ stats, config, onToggleBot }: HeaderProps) => {
+export const Header = ({ stats, config, onToggleBot, connectionStatus }: HeaderProps) => {
   const isRunning = stats.status === 'RUNNING';
   
   return (
@@ -33,6 +35,7 @@ export const Header = ({ stats, config, onToggleBot }: HeaderProps) => {
         <span className="status-badge bg-accent/20 text-accent border border-accent/30">
           {config.mode.toUpperCase()}
         </span>
+        {connectionStatus}
       </div>
 
       <div className="hidden md:flex items-center gap-6 font-mono text-sm">

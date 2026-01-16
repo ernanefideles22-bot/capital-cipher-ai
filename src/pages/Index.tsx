@@ -7,6 +7,7 @@ import { LogsPanel } from '@/components/trading/LogsPanel';
 import { PnLChart } from '@/components/trading/PnLChart';
 import { DrawdownGauge } from '@/components/trading/DrawdownGauge';
 import { ConfigPanel } from '@/components/trading/ConfigPanel';
+import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
 import { useTradingData } from '@/hooks/useTradingData';
 
 const Index = () => {
@@ -18,12 +19,28 @@ const Index = () => {
     aiDecisions, 
     config,
     toggleBotStatus,
-    updateConfig 
+    updateConfig,
+    isConnected,
+    connectionStatus,
+    connectionError,
+    reconnect,
   } = useTradingData();
 
   return (
     <div className="min-h-screen bg-background">
-      <Header stats={botStats} config={config} onToggleBot={toggleBotStatus} />
+      <Header 
+        stats={botStats} 
+        config={config} 
+        onToggleBot={toggleBotStatus}
+        connectionStatus={
+          <ConnectionStatus 
+            status={connectionStatus}
+            isConnected={isConnected}
+            error={connectionError}
+            onReconnect={reconnect}
+          />
+        }
+      />
       
       <main className="container py-4 space-y-4">
         {/* Price Tickers */}
@@ -64,7 +81,11 @@ const Index = () => {
         {/* Footer */}
         <footer className="text-center py-4 text-xs text-muted-foreground border-t border-border">
           <p>Institutional AI Trading Bot • Bybit Integration Ready</p>
-          <p className="mt-1">Dashboard conectado ao bot Python local via API</p>
+          <p className="mt-1">
+            {isConnected 
+              ? '🟢 Conectado ao bot Python via WebSocket' 
+              : '🟡 Modo demonstração - Execute o bot para dados reais'}
+          </p>
         </footer>
       </main>
     </div>

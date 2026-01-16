@@ -34,10 +34,12 @@ try:
     import numpy as np
     import pandas as pd
     from websocket import WebSocketApp
+    import asyncio
+    import websockets
 except ImportError as e:
     print(f"Erro: Dependência não encontrada - {e}")
     print("\nInstale as dependências com:")
-    print("pip install requests numpy pandas websocket-client")
+    print("pip install requests numpy pandas websocket-client websockets")
     sys.exit(1)
 
 
@@ -1127,12 +1129,297 @@ class InstitutionalTradingBot:
 
 
 # ==============================================================================
+# WEBSOCKET SERVER PARA DASHBOARD
+# ==============================================================================
+
+class DashboardWebSocketServer:
+    """Servidor WebSocket para comunicação com o dashboard React."""
+    
+    def __init__(self, bot: 'InstitutionalTradingBot', host: str = "0.0.0.0", port: int = 8765):
+        self.bot = bot
+        self.host = host
+        self.port = port
+        self.clients: set = set()
+        self.running = False
+        
+    async def handler(self, websocket, path):
+        """Gerencia conexões WebSocket."""
+        self.clients.add(websocket)
+        logger.info(f"Dashboard conectado. Total: {len(self.clients)}")
+        
+        try:
+            # Envia estado inicial completo
+            await self.send_full_state(websocket)
+            
+            async for message in websocket:
+                await self.handle_message(websocket, message)
+                
+        except websockets.exceptions.ConnectionClosed:
+            pass
+        finally:
+            self.clients.discard(websocket)
+            logger.info(f"Dashboard desconectado. Total: {len(self.clients)}")
+    
+    async def handle_message(self, websocket, message: str):
+        """Processa mensagens do dashboard."""
+        try:
+            data = json.loads(message)
+            msg_type = data.get("type")
+            
+            if msg_type == "get_state":
+                await self.send_full_state(websocket)
+                
+            elif msg_type == "command":
+                action = data.get("action")
+                if action == "start":
+                    self.bot.resume()
+                elif action == "pause":
+                    self.bot.pause()
+                elif action == "stop":
+                    self.bot.stop()
+                    
+            elif msg_type == "config_update":
+                config_data = data.get("data", {})
+                if "default_leverage" in config_data:
+                    self.bot.config.leverage = config_data["default_leverage"]
+                if "max_drawdown" in config_data:
+                    self.bot.config.max_drawdown = config_data["max_drawdown"]
+                if "risk_per_trade" in config_data:
+                    self.bot.config.risk_per_trade = config_data["risk_per_trade"]
+                if "symbols" in config_data:
+                    self.bot.config.symbols = config_data["symbols"]
+                    
+                logger.info("Configuração atualizada via dashboard")
+                
+        except json.JSONDecodeError:
+            logger.error(f"Mensagem inválida: {message}")
+    
+    async def send_full_state(self, websocket):
+        """Envia estado completo para um cliente."""
+        state = {
+            "type": "full_state",
+            "data": {
+                "bot_stats": self.get_bot_stats(),
+                "trades": self.get_trades(),
+                "config": self.get_config(),
+            },
+            "timestamp": int(time.time() * 1000)
+        }
+        await websocket.send(json.dumps(state))
+    
+    def get_bot_stats(self) -> Dict:
+        """Retorna estatísticas do bot."""
+        rm = self.bot.risk_manager
+        ai = self.bot.ai_engine
+        
+        total_trades = len(ai.trade_history)
+        wins = sum(1 for t in ai.trade_history if t.get("pnl", 0) > 0)
+        win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
+        
+        return {
+            "status": self.bot.status.value,
+            "total_trades": total_trades,
+            "win_rate": round(win_rate, 1),
+            "total_pnl": round(rm.current_capital - rm.initial_capital, 2),
+            "daily_pnl": round(rm.daily_pnl, 2),
+            "weekly_pnl": round(rm.daily_pnl * 5, 2),  # Estimativa
+            "monthly_pnl": round(rm.daily_pnl * 22, 2),  # Estimativa
+            "current_drawdown": round(rm.current_drawdown, 2),
+            "max_drawdown": round(self.bot.config.max_drawdown, 2),
+            "sharpe_ratio": round(ai.calculate_sharpe_ratio(), 2),
+            "profit_factor": round(ai.calculate_profit_factor(), 2),
+        }
+    
+    def get_trades(self) -> List[Dict]:
+        """Retorna histórico de trades."""
+        return [
+            {
+                "id": str(i),
+                "symbol": t.get("symbol", "UNKNOWN"),
+                "side": t.get("side", "Buy"),
+                "strategy": t.get("strategy", "SCALP"),
+                "entry_price": t.get("entry_price", 0),
+                "exit_price": t.get("exit_price"),
+                "quantity": t.get("quantity", 0),
+                "leverage": t.get("leverage", 1),
+                "stop_loss": t.get("stop_loss", 0),
+                "take_profit": t.get("take_profit", 0),
+                "pnl": t.get("pnl", 0),
+                "pnl_percentage": t.get("pnl_percentage", 0),
+                "status": "CLOSED" if t.get("exit_price") else "OPEN",
+                "opened_at": t.get("opened_at", datetime.now().isoformat()),
+                "closed_at": t.get("closed_at"),
+            }
+            for i, t in enumerate(self.bot.ai_engine.trade_history[-50:])
+        ]
+    
+    def get_config(self) -> Dict:
+        """Retorna configuração atual."""
+        return {
+            "testnet": self.bot.config.testnet,
+            "market_mode": self.bot.config.market_mode.value,
+            "default_leverage": self.bot.config.leverage,
+            "max_drawdown": self.bot.config.max_drawdown,
+            "max_concurrent_trades": self.bot.config.max_concurrent_trades,
+            "risk_per_trade": self.bot.config.risk_per_trade,
+            "symbols": self.bot.config.symbols,
+        }
+    
+    async def broadcast(self, message: Dict):
+        """Envia mensagem para todos os clientes."""
+        if not self.clients:
+            return
+            
+        msg = json.dumps({**message, "timestamp": int(time.time() * 1000)})
+        await asyncio.gather(
+            *[client.send(msg) for client in self.clients],
+            return_exceptions=True
+        )
+    
+    async def broadcast_market_data(self, symbol: str, price: float, volume: float = 0):
+        """Envia dados de mercado."""
+        await self.broadcast({
+            "type": "market_data",
+            "data": {
+                "symbol": symbol,
+                "price": price,
+                "volume_24h": volume,
+            }
+        })
+    
+    async def broadcast_trade(self, trade: Dict):
+        """Envia atualização de trade."""
+        await self.broadcast({
+            "type": "trade",
+            "data": trade
+        })
+    
+    async def broadcast_log(self, level: str, message: str):
+        """Envia log."""
+        await self.broadcast({
+            "type": "log",
+            "data": {
+                "level": level,
+                "message": message,
+            }
+        })
+    
+    async def broadcast_ai_decision(self, decision: Dict):
+        """Envia decisão da IA."""
+        await self.broadcast({
+            "type": "ai_decision",
+            "data": decision
+        })
+    
+    async def broadcast_stats(self):
+        """Envia estatísticas atualizadas."""
+        await self.broadcast({
+            "type": "bot_stats",
+            "data": self.get_bot_stats()
+        })
+    
+    async def start(self):
+        """Inicia o servidor WebSocket."""
+        self.running = True
+        logger.info(f"WebSocket Server iniciando em ws://{self.host}:{self.port}")
+        
+        async with websockets.serve(self.handler, self.host, self.port):
+            while self.running:
+                # Envia atualizações periódicas de stats
+                if self.clients:
+                    await self.broadcast_stats()
+                await asyncio.sleep(2)
+    
+    def stop(self):
+        """Para o servidor."""
+        self.running = False
+
+
+# ==============================================================================
 # PONTO DE ENTRADA
 # ==============================================================================
 
+def run_with_dashboard():
+    """Executa bot com servidor WebSocket para dashboard."""
+    print("""
+    ╔══════════════════════════════════════════════════════════════╗
+    ║         INSTITUTIONAL AI TRADING BOT - BYBIT                 ║
+    ║                    + DASHBOARD WEBSOCKET                     ║
+    ║                                                              ║
+    ║  • Leitura de movimentos institucionais                     ║
+    ║  • Estratégias: Scalp, DayTrade, Swing                      ║
+    ║  • Gestão de risco inviolável                               ║
+    ║  • IA evolutiva                                             ║
+    ║  • Dashboard: ws://localhost:8765                           ║
+    ╚══════════════════════════════════════════════════════════════╝
+    """)
+    
+    config = BotConfig.from_env()
+    bot = InstitutionalTradingBot(config)
+    
+    if not bot.initialize():
+        logger.error("Falha na inicialização do bot")
+        return
+    
+    ws_server = DashboardWebSocketServer(bot)
+    
+    # Thread para o bot
+    def run_bot():
+        bot.running = True
+        bot.status = BotStatus.RUNNING
+        
+        cycle_interval = 60
+        last_daily_reset = datetime.now().date()
+        
+        while bot.running:
+            try:
+                if datetime.now().date() != last_daily_reset:
+                    bot.risk_manager.reset_daily()
+                    last_daily_reset = datetime.now().date()
+                
+                if bot.status == BotStatus.RUNNING:
+                    bot.run_cycle()
+                    
+                    # Broadcast para dashboard (sync)
+                    loop = asyncio.new_event_loop()
+                    loop.run_until_complete(ws_server.broadcast_stats())
+                    loop.close()
+                
+                time.sleep(cycle_interval)
+                
+            except Exception as e:
+                logger.error(f"Erro no ciclo: {e}")
+                time.sleep(10)
+    
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    
+    # Inicia servidor WebSocket (async)
+    try:
+        asyncio.run(ws_server.start())
+    except KeyboardInterrupt:
+        logger.info("\nEncerrando...")
+        bot.stop()
+        ws_server.stop()
+
+
 def main():
     """Função principal."""
-    print("""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Institutional AI Trading Bot')
+    parser.add_argument('--dashboard', '-d', action='store_true', 
+                       help='Habilita servidor WebSocket para dashboard')
+    parser.add_argument('--port', '-p', type=int, default=8765,
+                       help='Porta do servidor WebSocket (padrão: 8765)')
+    
+    args = parser.parse_args()
+    
+    if args.dashboard:
+        run_with_dashboard()
+    else:
+        # Modo standalone original
+        print("""
     ╔══════════════════════════════════════════════════════════════╗
     ║         INSTITUTIONAL AI TRADING BOT - BYBIT                 ║
     ║                                                              ║
@@ -1140,20 +1427,19 @@ def main():
     ║  • Estratégias: Scalp, DayTrade, Swing                      ║
     ║  • Gestão de risco inviolável                               ║
     ║  • IA evolutiva                                             ║
+    ║                                                              ║
+    ║  Dica: Use --dashboard para conectar ao painel visual       ║
     ╚══════════════════════════════════════════════════════════════╝
-    """)
-    
-    # Carrega configuração
-    config = BotConfig.from_env()
-    
-    # Cria e inicia bot
-    bot = InstitutionalTradingBot(config)
-    
-    try:
-        bot.start()
-    except Exception as e:
-        logger.critical(f"Erro fatal: {e}")
-        sys.exit(1)
+        """)
+        
+        config = BotConfig.from_env()
+        bot = InstitutionalTradingBot(config)
+        
+        try:
+            bot.start()
+        except Exception as e:
+            logger.critical(f"Erro fatal: {e}")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
