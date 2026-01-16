@@ -38,15 +38,20 @@ const generateMarketData = (symbol: string): MarketData => {
   };
 };
 
-const generateLogEntry = (): LogEntry => {
+// Simulated prices that update realistically
+const livePrices: Record<string, number> = { ...TRADING_PAIRS };
+
+const generateLogEntry = (customMessage?: { level: LogEntry['level'], message: string }): LogEntry => {
   const messages = [
-    { level: 'INFO' as const, message: 'Analisando volume institucional em BTCUSDT...' },
-    { level: 'SUCCESS' as const, message: 'Trade fechado com +2.3% de lucro' },
-    { level: 'AI' as const, message: 'Detectado acúmulo institucional no suporte de $94,500' },
-    { level: 'WARN' as const, message: 'Volatilidade alta detectada, reduzindo exposição' },
+    { level: 'INFO' as const, message: 'Analisando volume institucional...' },
+    { level: 'INFO' as const, message: 'Verificando correlação entre ativos...' },
+    { level: 'AI' as const, message: 'Detectado padrão de acúmulo institucional' },
+    { level: 'AI' as const, message: 'Análise multi-timeframe concluída' },
+    { level: 'WARN' as const, message: 'Volatilidade elevada, ajustando posição' },
+    { level: 'INFO' as const, message: 'Monitorando níveis de liquidez...' },
   ];
   
-  const entry = messages[Math.floor(Math.random() * messages.length)];
+  const entry = customMessage || messages[Math.floor(Math.random() * messages.length)];
   
   return {
     id: crypto.randomUUID(),
@@ -54,6 +59,82 @@ const generateLogEntry = (): LogEntry => {
     level: entry.level,
     message: entry.message,
   };
+};
+
+// Track open positions for simulation
+let openPositions: Trade[] = [];
+let totalPnL = 0;
+let dailyPnL = 0;
+let totalTradesCount = 0;
+let winCount = 0;
+
+const executeAITrade = (decision: AIDecision): Trade | null => {
+  if (decision.action !== 'BUY' && decision.action !== 'SELL') return null;
+  if (decision.confidence < 70) return null;
+  if (openPositions.length >= 3) return null;
+  
+  const side: Trade['side'] = decision.action === 'BUY' ? 'LONG' : 'SHORT';
+  const strategies: Trade['strategy'][] = ['SCALP', 'DAYTRADE', 'SWING'];
+  const basePrice = livePrices[decision.symbol] || 100;
+  const entryPrice = basePrice;
+  
+  const trade: Trade = {
+    id: crypto.randomUUID(),
+    symbol: decision.symbol,
+    side,
+    strategy: strategies[Math.floor(Math.random() * strategies.length)],
+    entryPrice,
+    quantity: Math.random() * 0.3 + 0.1,
+    leverage: Math.floor(Math.random() * 5) + 3,
+    stopLoss: entryPrice * (side === 'LONG' ? 0.985 : 1.015),
+    takeProfit: entryPrice * (side === 'LONG' ? 1.025 : 0.975),
+    status: 'OPEN',
+    openedAt: new Date(),
+  };
+  
+  openPositions.push(trade);
+  return trade;
+};
+
+const checkTradeExits = (): Trade[] => {
+  const closedTrades: Trade[] = [];
+  
+  openPositions = openPositions.filter(trade => {
+    const currentPrice = livePrices[trade.symbol] || trade.entryPrice;
+    const priceChange = (currentPrice - trade.entryPrice) / trade.entryPrice;
+    const pnlMultiplier = trade.side === 'LONG' ? 1 : -1;
+    const unrealizedPnL = priceChange * pnlMultiplier;
+    
+    // Check stop loss or take profit
+    const hitStopLoss = unrealizedPnL <= -0.015;
+    const hitTakeProfit = unrealizedPnL >= 0.025;
+    const randomExit = Math.random() > 0.92;
+    
+    if (hitStopLoss || hitTakeProfit || randomExit) {
+      const pnlPercent = unrealizedPnL * 100 * trade.leverage;
+      const pnlValue = trade.entryPrice * trade.quantity * unrealizedPnL * trade.leverage;
+      
+      const closedTrade: Trade = {
+        ...trade,
+        exitPrice: currentPrice,
+        pnl: pnlValue,
+        pnlPercentage: pnlPercent,
+        status: 'CLOSED',
+        closedAt: new Date(),
+      };
+      
+      totalPnL += pnlValue;
+      dailyPnL += pnlValue;
+      totalTradesCount++;
+      if (pnlValue > 0) winCount++;
+      
+      closedTrades.push(closedTrade);
+      return false;
+    }
+    return true;
+  });
+  
+  return closedTrades;
 };
 
 const generateTrade = (): Trade => {
@@ -323,47 +404,166 @@ export const useTradingData = () => {
   const startSimulation = useCallback(() => {
     if (simulationRef.current) return;
 
-    // Initialize with simulated data for all pairs
+    // Reset simulation state
+    openPositions = [];
+    totalPnL = 5000; // Start with some P&L
+    dailyPnL = 0;
+    totalTradesCount = 150;
+    winCount = 102;
+
+    // Initialize prices
     const symbols = Object.keys(TRADING_PAIRS);
+    symbols.forEach(symbol => {
+      livePrices[symbol] = TRADING_PAIRS[symbol];
+    });
+
+    // Initialize with simulated data for all pairs
     const initialMarket: Record<string, MarketData> = {};
     symbols.forEach(symbol => {
       initialMarket[symbol] = generateMarketData(symbol);
     });
     setMarketData(initialMarket);
-    setTrades(Array.from({ length: 15 }, generateTrade));
-    setAIDecisions(Array.from({ length: 5 }, generateAIDecision));
+    setTrades(Array.from({ length: 10 }, generateTrade));
+    setAIDecisions(Array.from({ length: 3 }, generateAIDecision));
     setBotStats({
       status: 'RUNNING',
-      totalTrades: 247,
-      winRate: 68.5,
-      totalPnL: 12450.67,
-      dailyPnL: 892.34,
-      weeklyPnL: 3420.12,
-      monthlyPnL: 12450.67,
-      currentDrawdown: 3.2,
-      maxDrawdown: 8.5,
-      sharpeRatio: 2.34,
-      profitFactor: 1.87,
+      totalTrades: totalTradesCount,
+      winRate: (winCount / totalTradesCount) * 100,
+      totalPnL: totalPnL,
+      dailyPnL: dailyPnL,
+      weeklyPnL: 2340.50,
+      monthlyPnL: totalPnL,
+      currentDrawdown: 2.1,
+      maxDrawdown: 6.8,
+      sharpeRatio: 2.15,
+      profitFactor: 1.92,
     });
 
+    setLogs(prev => [generateLogEntry({ level: 'SUCCESS', message: '🤖 Bot IA iniciado - Modo simulação ativo' }), ...prev.slice(0, 99)]);
+
+    // Main simulation loop - runs every 1.5 seconds
     simulationRef.current = setInterval(() => {
-      // Update market data for all pairs
+      // Update prices realistically
+      symbols.forEach(symbol => {
+        const basePrice = TRADING_PAIRS[symbol];
+        const volatility = basePrice * 0.001;
+        const trend = Math.sin(Date.now() / 50000) * 0.0002;
+        livePrices[symbol] = livePrices[symbol] * (1 + (Math.random() - 0.5 + trend) * 0.002);
+        // Keep prices within reasonable bounds
+        livePrices[symbol] = Math.max(basePrice * 0.9, Math.min(basePrice * 1.1, livePrices[symbol]));
+      });
+
+      // Update market data display
       setMarketData(prev => {
         const updated = { ...prev };
         symbols.forEach(symbol => {
-          updated[symbol] = generateMarketData(symbol);
+          const price = livePrices[symbol];
+          const basePrice = TRADING_PAIRS[symbol];
+          updated[symbol] = {
+            symbol,
+            price,
+            change24h: price - basePrice,
+            changePercentage24h: ((price - basePrice) / basePrice) * 100,
+            high24h: Math.max(price * 1.01, prev[symbol]?.high24h || price),
+            low24h: Math.min(price * 0.99, prev[symbol]?.low24h || price),
+            volume24h: Math.random() * 1000000000 + 500000000,
+            timestamp: Date.now(),
+          };
         });
         return updated;
       });
 
-      // Occasionally add logs and decisions
-      if (Math.random() > 0.7) {
-        setLogs(prev => [generateLogEntry(), ...prev.slice(0, 99)]);
+      // Check for trade exits
+      const closedTrades = checkTradeExits();
+      if (closedTrades.length > 0) {
+        closedTrades.forEach(trade => {
+          const isProfit = (trade.pnl || 0) > 0;
+          setLogs(prev => [
+            generateLogEntry({ 
+              level: isProfit ? 'SUCCESS' : 'WARN', 
+              message: `${isProfit ? '✅' : '❌'} ${trade.symbol} ${trade.side} fechado: ${isProfit ? '+' : ''}$${(trade.pnl || 0).toFixed(2)} (${(trade.pnlPercentage || 0).toFixed(2)}%)` 
+            }), 
+            ...prev.slice(0, 99)
+          ]);
+        });
+        
+        setTrades(prev => [...closedTrades, ...prev.slice(0, 49)]);
       }
-      if (Math.random() > 0.9) {
-        setAIDecisions(prev => [generateAIDecision(), ...prev.slice(0, 9)]);
+
+      // AI makes decisions frequently
+      if (Math.random() > 0.4) {
+        const decision = generateAIDecision();
+        setAIDecisions(prev => [decision, ...prev.slice(0, 9)]);
+
+        // Log the decision
+        if (decision.action === 'BUY' || decision.action === 'SELL') {
+          setLogs(prev => [
+            generateLogEntry({ 
+              level: 'AI', 
+              message: `🧠 Analisando ${decision.symbol}: ${decision.action} (${decision.confidence.toFixed(0)}% confiança)` 
+            }), 
+            ...prev.slice(0, 99)
+          ]);
+
+          // Execute trade if conditions are met
+          const newTrade = executeAITrade(decision);
+          if (newTrade) {
+            setLogs(prev => [
+              generateLogEntry({ 
+                level: 'SUCCESS', 
+                message: `🚀 TRADE ABERTO: ${newTrade.symbol} ${newTrade.side} @ $${newTrade.entryPrice.toFixed(2)} | SL: $${newTrade.stopLoss.toFixed(2)} | TP: $${newTrade.takeProfit.toFixed(2)}` 
+              }), 
+              ...prev.slice(0, 99)
+            ]);
+            
+            setTrades(prev => [newTrade, ...prev.slice(0, 49)]);
+          }
+        } else if (decision.action === 'HOLD' && decision.confidence > 75) {
+          setLogs(prev => [
+            generateLogEntry({ 
+              level: 'INFO', 
+              message: `⏸️ ${decision.symbol}: Aguardando melhor entrada` 
+            }), 
+            ...prev.slice(0, 99)
+          ]);
+        }
       }
-    }, 2000);
+
+      // Update open positions in trades list
+      if (openPositions.length > 0) {
+        setTrades(prev => {
+          const closedTrades = prev.filter(t => t.status === 'CLOSED');
+          const updatedOpen = openPositions.map(trade => {
+            const currentPrice = livePrices[trade.symbol] || trade.entryPrice;
+            const priceChange = (currentPrice - trade.entryPrice) / trade.entryPrice;
+            const pnlMultiplier = trade.side === 'LONG' ? 1 : -1;
+            const unrealizedPnL = priceChange * pnlMultiplier * trade.leverage;
+            return {
+              ...trade,
+              pnl: trade.entryPrice * trade.quantity * unrealizedPnL,
+              pnlPercentage: unrealizedPnL * 100,
+            };
+          });
+          return [...updatedOpen, ...closedTrades.slice(0, 49 - updatedOpen.length)];
+        });
+      }
+
+      // Update bot stats
+      const winRate = totalTradesCount > 0 ? (winCount / totalTradesCount) * 100 : 0;
+      const currentDrawdown = Math.max(0, Math.random() * 3 + (totalPnL < 0 ? 2 : 0));
+      
+      setBotStats(prev => ({
+        ...prev,
+        totalTrades: totalTradesCount,
+        winRate: parseFloat(winRate.toFixed(1)),
+        totalPnL: parseFloat(totalPnL.toFixed(2)),
+        dailyPnL: parseFloat(dailyPnL.toFixed(2)),
+        currentDrawdown: parseFloat(currentDrawdown.toFixed(1)),
+        sharpeRatio: parseFloat((1.5 + (winRate / 50)).toFixed(2)),
+        profitFactor: parseFloat((0.8 + (winRate / 40)).toFixed(2)),
+      }));
+
+    }, 1500);
   }, []);
 
   // Start simulation on mount if not connected
