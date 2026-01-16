@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Header } from '@/components/trading/Header';
 import { PriceCard } from '@/components/trading/PriceCard';
 import { StatsGrid } from '@/components/trading/StatsGrid';
@@ -10,9 +11,15 @@ import { AIMemoryPanel } from '@/components/trading/AIMemoryPanel';
 import { DrawdownGauge } from '@/components/trading/DrawdownGauge';
 import { ConfigPanel } from '@/components/trading/ConfigPanel';
 import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
-import { useTradingData } from '@/hooks/useTradingData';
+import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
+import { useVoiceAlerts } from '@/hooks/useVoiceAlerts';
+import { Volume2, VolumeX } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const Index = () => {
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const { announceTradeOpened, announceTradeClosed } = useVoiceAlerts({ enabled: voiceEnabled });
+  
   const { 
     marketData, 
     botStats, 
@@ -27,6 +34,22 @@ const Index = () => {
     connectionError,
     reconnect,
   } = useTradingData();
+
+  // Set up voice alert callbacks
+  useEffect(() => {
+    setVoiceAlertCallbacks({
+      onTradeOpened: (symbol, side, confidence) => {
+        if (voiceEnabled) {
+          announceTradeOpened(symbol, side, confidence);
+        }
+      },
+      onTradeClosed: (symbol, pnl, reason) => {
+        if (voiceEnabled) {
+          announceTradeClosed(symbol, pnl, reason);
+        }
+      },
+    });
+  }, [voiceEnabled, announceTradeOpened, announceTradeClosed]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -92,6 +115,17 @@ const Index = () => {
 
         {/* Footer */}
         <footer className="text-center py-4 text-xs text-muted-foreground border-t border-border">
+          <div className="flex items-center justify-center gap-4 mb-2">
+            <Button
+              variant={voiceEnabled ? "default" : "outline"}
+              size="sm"
+              onClick={() => setVoiceEnabled(!voiceEnabled)}
+              className="gap-2"
+            >
+              {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              {voiceEnabled ? 'Voice Alerts ON' : 'Voice Alerts OFF'}
+            </Button>
+          </div>
           <p>Institutional AI Trading Bot • Bybit Integration Ready</p>
           <p className="mt-1">
             {isConnected 
