@@ -1,7 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { Trade, MarketData, BotStats, AIDecision, LogEntry, BotConfig, BotStatus } from '@/types/trading';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { Trade, MarketData, BotStats, AIDecision, LogEntry, BotConfig } from '@/types/trading';
+import { useWebSocket, WebSocketMessage } from './useWebSocket';
 
-// Simulated data generators for demo purposes
+// WebSocket URL - configure this to match your Python bot
+const WS_URL = import.meta.env.VITE_BOT_WS_URL || 'ws://localhost:8765';
+
+// Fallback simulated data generators (used when not connected)
 const generateMarketData = (symbol: string): MarketData => {
   const basePrice = symbol === 'BTCUSDT' ? 95000 : symbol === 'ETHUSDT' ? 3200 : 180;
   const variation = (Math.random() - 0.5) * basePrice * 0.002;
@@ -21,16 +25,11 @@ const generateMarketData = (symbol: string): MarketData => {
 };
 
 const generateLogEntry = (): LogEntry => {
-  const levels: LogEntry['level'][] = ['INFO', 'SUCCESS', 'WARN', 'AI'];
   const messages = [
-    { level: 'INFO', message: 'Analisando volume institucional em BTCUSDT...' },
-    { level: 'SUCCESS', message: 'Trade fechado com +2.3% de lucro' },
-    { level: 'AI', message: 'Detectado acúmulo institucional no suporte de $94,500' },
-    { level: 'WARN', message: 'Volatilidade alta detectada, reduzindo exposição' },
-    { level: 'AI', message: 'Divergência bullish confirmada no timeframe 15m' },
-    { level: 'INFO', message: 'Stop loss ajustado para breakeven' },
-    { level: 'SUCCESS', message: 'Take profit parcial executado em 50%' },
-    { level: 'AI', message: 'Zona premium identificada, aguardando pullback' },
+    { level: 'INFO' as const, message: 'Analisando volume institucional em BTCUSDT...' },
+    { level: 'SUCCESS' as const, message: 'Trade fechado com +2.3% de lucro' },
+    { level: 'AI' as const, message: 'Detectado acúmulo institucional no suporte de $94,500' },
+    { level: 'WARN' as const, message: 'Volatilidade alta detectada, reduzindo exposição' },
   ];
   
   const entry = messages[Math.floor(Math.random() * messages.length)];
@@ -38,7 +37,7 @@ const generateLogEntry = (): LogEntry => {
   return {
     id: crypto.randomUUID(),
     timestamp: new Date(),
-    level: entry.level as LogEntry['level'],
+    level: entry.level,
     message: entry.message,
   };
 };
@@ -80,8 +79,6 @@ const generateAIDecision = (): AIDecision => {
     'Acúmulo institucional detectado com volume crescente',
     'Distribuição em zona premium, aguardando confirmação',
     'Quebra de estrutura com volume validado',
-    'Falso rompimento identificado - liquidity grab',
-    'Divergência preço/volume confirmada em múltiplos TFs',
   ];
   
   return {
@@ -101,27 +98,25 @@ const generateAIDecision = (): AIDecision => {
 };
 
 export const useTradingData = () => {
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [marketData, setMarketData] = useState<Record<string, MarketData>>({});
   const [botStats, setBotStats] = useState<BotStats>({
-    status: 'RUNNING',
-    totalTrades: 247,
-    winRate: 68.5,
-    totalPnL: 12450.67,
-    dailyPnL: 892.34,
-    weeklyPnL: 3420.12,
-    monthlyPnL: 12450.67,
-    currentDrawdown: 3.2,
-    maxDrawdown: 8.5,
-    sharpeRatio: 2.34,
-    profitFactor: 1.87,
+    status: 'PAUSED',
+    totalTrades: 0,
+    winRate: 0,
+    totalPnL: 0,
+    dailyPnL: 0,
+    weeklyPnL: 0,
+    monthlyPnL: 0,
+    currentDrawdown: 0,
+    maxDrawdown: 10,
+    sharpeRatio: 0,
+    profitFactor: 0,
   });
-  const [trades, setTrades] = useState<Trade[]>(() => 
-    Array.from({ length: 15 }, generateTrade)
-  );
+  const [trades, setTrades] = useState<Trade[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [aiDecisions, setAIDecisions] = useState<AIDecision[]>(() =>
-    Array.from({ length: 5 }, generateAIDecision)
-  );
+  const [aiDecisions, setAIDecisions] = useState<AIDecision[]>([]);
   const [config, setConfig] = useState<BotConfig>({
     mode: 'paper',
     marketMode: 'FUTURES',
@@ -132,63 +127,298 @@ export const useTradingData = () => {
     assets: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
   });
 
-  // Simulate real-time market data updates
-  useEffect(() => {
+  const simulationRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
+    const { type, data } = message;
+
+    switch (type) {
+      case 'market_data':
+        setMarketData(prev => ({
+          ...prev,
+          [data.symbol]: {
+            symbol: data.symbol,
+            price: data.price,
+            change24h: data.change_24h || 0,
+            changePercentage24h: data.change_percentage_24h || 0,
+            high24h: data.high_24h || data.price,
+            low24h: data.low_24h || data.price,
+            volume24h: data.volume_24h || 0,
+            timestamp: data.timestamp || Date.now(),
+          },
+        }));
+        break;
+
+      case 'bot_stats':
+        setBotStats({
+          status: data.status?.toUpperCase() || 'PAUSED',
+          totalTrades: data.total_trades || 0,
+          winRate: data.win_rate || 0,
+          totalPnL: data.total_pnl || 0,
+          dailyPnL: data.daily_pnl || 0,
+          weeklyPnL: data.weekly_pnl || 0,
+          monthlyPnL: data.monthly_pnl || 0,
+          currentDrawdown: data.current_drawdown || 0,
+          maxDrawdown: data.max_drawdown || 10,
+          sharpeRatio: data.sharpe_ratio || 0,
+          profitFactor: data.profit_factor || 0,
+        });
+        break;
+
+      case 'trade':
+        setTrades(prev => {
+          const newTrade: Trade = {
+            id: data.id || crypto.randomUUID(),
+            symbol: data.symbol,
+            side: data.side?.toUpperCase() === 'BUY' ? 'LONG' : 'SHORT',
+            strategy: data.strategy?.toUpperCase() || 'SCALP',
+            entryPrice: data.entry_price,
+            exitPrice: data.exit_price,
+            quantity: data.quantity,
+            leverage: data.leverage || 1,
+            stopLoss: data.stop_loss,
+            takeProfit: data.take_profit,
+            pnl: data.pnl || 0,
+            pnlPercentage: data.pnl_percentage || 0,
+            status: data.status?.toUpperCase() || 'OPEN',
+            openedAt: new Date(data.opened_at || Date.now()),
+            closedAt: data.closed_at ? new Date(data.closed_at) : undefined,
+          };
+          
+          // Update existing trade or add new
+          const existingIndex = prev.findIndex(t => t.id === newTrade.id);
+          if (existingIndex >= 0) {
+            const updated = [...prev];
+            updated[existingIndex] = newTrade;
+            return updated;
+          }
+          return [newTrade, ...prev.slice(0, 49)];
+        });
+        break;
+
+      case 'log':
+        setLogs(prev => [{
+          id: crypto.randomUUID(),
+          timestamp: new Date(data.timestamp || Date.now()),
+          level: data.level?.toUpperCase() || 'INFO',
+          message: data.message,
+        }, ...prev.slice(0, 99)]);
+        break;
+
+      case 'ai_decision':
+        setAIDecisions(prev => [{
+          id: crypto.randomUUID(),
+          timestamp: new Date(data.timestamp || Date.now()),
+          symbol: data.symbol,
+          action: data.action?.toUpperCase() || 'HOLD',
+          confidence: data.confidence || 0,
+          reasoning: data.reasoning || '',
+          indicators: {
+            institutionalFlow: data.institutional_flow || 0,
+            volumeCluster: data.volume_cluster || false,
+            trendStrength: data.trend_strength || 0,
+            riskScore: data.risk_score || 0,
+          },
+        }, ...prev.slice(0, 9)]);
+        break;
+
+      case 'config':
+        setConfig({
+          mode: data.testnet ? 'paper' : 'live',
+          marketMode: data.market_mode?.toUpperCase() || 'FUTURES',
+          leverage: data.default_leverage || 5,
+          maxDrawdown: data.max_drawdown || 10,
+          maxConcurrentTrades: data.max_concurrent_trades || 3,
+          riskPerTrade: data.risk_per_trade || 2,
+          assets: data.symbols || ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
+        });
+        break;
+
+      case 'full_state':
+        // Handle initial full state sync
+        if (data.market_data) {
+          const newMarketData: Record<string, MarketData> = {};
+          Object.entries(data.market_data).forEach(([symbol, md]: [string, any]) => {
+            newMarketData[symbol] = {
+              symbol,
+              price: md.price,
+              change24h: md.change_24h || 0,
+              changePercentage24h: md.change_percentage_24h || 0,
+              high24h: md.high_24h || md.price,
+              low24h: md.low_24h || md.price,
+              volume24h: md.volume_24h || 0,
+              timestamp: md.timestamp || Date.now(),
+            };
+          });
+          setMarketData(newMarketData);
+        }
+        if (data.trades) {
+          setTrades(data.trades.map((t: any) => ({
+            id: t.id || crypto.randomUUID(),
+            symbol: t.symbol,
+            side: t.side?.toUpperCase() === 'BUY' ? 'LONG' : 'SHORT',
+            strategy: t.strategy?.toUpperCase() || 'SCALP',
+            entryPrice: t.entry_price,
+            exitPrice: t.exit_price,
+            quantity: t.quantity,
+            leverage: t.leverage || 1,
+            stopLoss: t.stop_loss,
+            takeProfit: t.take_profit,
+            pnl: t.pnl || 0,
+            pnlPercentage: t.pnl_percentage || 0,
+            status: t.status?.toUpperCase() || 'OPEN',
+            openedAt: new Date(t.opened_at || Date.now()),
+            closedAt: t.closed_at ? new Date(t.closed_at) : undefined,
+          })));
+        }
+        break;
+    }
+  }, []);
+
+  const { status, sendMessage, connect } = useWebSocket({
+    url: WS_URL,
+    reconnect: true,
+    reconnectInterval: 5000,
+    maxReconnectAttempts: 20,
+    onMessage: handleWebSocketMessage,
+    onConnect: () => {
+      setIsConnected(true);
+      setConnectionError(null);
+      // Clear simulation when connected
+      if (simulationRef.current) {
+        clearInterval(simulationRef.current);
+        simulationRef.current = null;
+      }
+      // Request full state sync
+      sendMessage({ type: 'get_state' });
+    },
+    onDisconnect: () => {
+      setIsConnected(false);
+      // Start simulation fallback
+      startSimulation();
+    },
+    onError: () => {
+      setConnectionError('Falha ao conectar ao bot. Usando dados simulados.');
+    },
+  });
+
+  // Simulation fallback for when WebSocket is not connected
+  const startSimulation = useCallback(() => {
+    if (simulationRef.current) return;
+
+    // Initialize with simulated data
     const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
-    
-    const updateMarket = () => {
-      const newData: Record<string, MarketData> = {};
-      symbols.forEach(symbol => {
-        newData[symbol] = generateMarketData(symbol);
+    const initialMarket: Record<string, MarketData> = {};
+    symbols.forEach(symbol => {
+      initialMarket[symbol] = generateMarketData(symbol);
+    });
+    setMarketData(initialMarket);
+    setTrades(Array.from({ length: 15 }, generateTrade));
+    setAIDecisions(Array.from({ length: 5 }, generateAIDecision));
+    setBotStats({
+      status: 'RUNNING',
+      totalTrades: 247,
+      winRate: 68.5,
+      totalPnL: 12450.67,
+      dailyPnL: 892.34,
+      weeklyPnL: 3420.12,
+      monthlyPnL: 12450.67,
+      currentDrawdown: 3.2,
+      maxDrawdown: 8.5,
+      sharpeRatio: 2.34,
+      profitFactor: 1.87,
+    });
+
+    simulationRef.current = setInterval(() => {
+      // Update market data
+      setMarketData(prev => {
+        const updated = { ...prev };
+        symbols.forEach(symbol => {
+          updated[symbol] = generateMarketData(symbol);
+        });
+        return updated;
       });
-      setMarketData(newData);
-    };
 
-    updateMarket();
-    const interval = setInterval(updateMarket, 2000);
-    return () => clearInterval(interval);
+      // Occasionally add logs and decisions
+      if (Math.random() > 0.7) {
+        setLogs(prev => [generateLogEntry(), ...prev.slice(0, 99)]);
+      }
+      if (Math.random() > 0.9) {
+        setAIDecisions(prev => [generateAIDecision(), ...prev.slice(0, 9)]);
+      }
+    }, 2000);
   }, []);
 
-  // Simulate log entries
+  // Start simulation on mount if not connected
   useEffect(() => {
-    const addLog = () => {
-      setLogs(prev => [generateLogEntry(), ...prev.slice(0, 99)]);
+    if (status === 'disconnected' || status === 'error') {
+      startSimulation();
+    }
+    
+    return () => {
+      if (simulationRef.current) {
+        clearInterval(simulationRef.current);
+      }
     };
-
-    const interval = setInterval(addLog, 5000);
-    addLog(); // Initial log
-    return () => clearInterval(interval);
-  }, []);
-
-  // Simulate AI decisions
-  useEffect(() => {
-    const addDecision = () => {
-      setAIDecisions(prev => [generateAIDecision(), ...prev.slice(0, 9)]);
-    };
-
-    const interval = setInterval(addDecision, 15000);
-    return () => clearInterval(interval);
-  }, []);
+  }, [status, startSimulation]);
 
   const toggleBotStatus = useCallback(() => {
+    const newStatus = botStats.status === 'RUNNING' ? 'PAUSED' : 'RUNNING';
+    
+    if (isConnected) {
+      sendMessage({
+        type: 'command',
+        action: newStatus === 'RUNNING' ? 'start' : 'pause',
+      });
+    }
+    
     setBotStats(prev => ({
       ...prev,
-      status: prev.status === 'RUNNING' ? 'PAUSED' : 'RUNNING',
+      status: newStatus,
     }));
-  }, []);
+  }, [botStats.status, isConnected, sendMessage]);
 
   const updateConfig = useCallback((newConfig: Partial<BotConfig>) => {
-    setConfig(prev => ({ ...prev, ...newConfig }));
-  }, []);
+    setConfig(prev => {
+      const updated = { ...prev, ...newConfig };
+      
+      if (isConnected) {
+        sendMessage({
+          type: 'config_update',
+          data: {
+            testnet: updated.mode === 'paper' || updated.mode === 'live',
+            market_mode: updated.marketMode.toLowerCase(),
+            default_leverage: updated.leverage,
+            max_drawdown: updated.maxDrawdown,
+            max_concurrent_trades: updated.maxConcurrentTrades,
+            risk_per_trade: updated.riskPerTrade,
+            symbols: updated.assets,
+          },
+        });
+      }
+      
+      return updated;
+    });
+  }, [isConnected, sendMessage]);
 
   return {
+    // Connection status
+    isConnected,
+    connectionStatus: status,
+    connectionError,
+    reconnect: connect,
+    
+    // Data
     marketData,
     botStats,
     trades,
     logs,
     aiDecisions,
     config,
+    
+    // Actions
     toggleBotStatus,
     updateConfig,
+    sendCommand: sendMessage,
   };
 };
