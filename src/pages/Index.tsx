@@ -4,7 +4,8 @@ import { StatsGrid } from '@/components/trading/StatsGrid';
 import { TradesTable } from '@/components/trading/TradesTable';
 import { AIDecisionsPanel } from '@/components/trading/AIDecisionsPanel';
 import { LogsPanel } from '@/components/trading/LogsPanel';
-import { PnLChart } from '@/components/trading/PnLChart';
+import { TradingViewChart } from '@/components/trading/TradingViewChart';
+import { AILearningPanel } from '@/components/trading/AILearningPanel';
 import { DrawdownGauge } from '@/components/trading/DrawdownGauge';
 import { ConfigPanel } from '@/components/trading/ConfigPanel';
 import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
@@ -55,15 +56,20 @@ const Index = () => {
           <StatsGrid stats={botStats} />
         </section>
 
+        {/* TradingView Chart */}
+        <section>
+          <TradingViewChart symbol="BTCUSDT" height={450} />
+        </section>
+
         {/* Main Content Grid */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Left Column - Chart & Table */}
+          {/* Left Column - AI Learning & Trades */}
           <div className="lg:col-span-2 space-y-4">
-            <PnLChart />
+            <AILearningPanel />
             <TradesTable trades={trades} />
           </div>
 
-          {/* Right Column - AI, Drawdown, Config */}
+          {/* Right Column - AI Decisions, Drawdown, Config */}
           <div className="space-y-4">
             <div className="h-[320px]">
               <AIDecisionsPanel decisions={aiDecisions} />

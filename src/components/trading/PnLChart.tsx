@@ -1,6 +1,14 @@
 import { useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { TrendingUp } from 'lucide-react';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
 export const PnLChart = () => {
   const data = useMemo(() => {
@@ -43,43 +51,43 @@ export const PnLChart = () => {
               <linearGradient id="pnlGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop 
                   offset="5%" 
-                  stopColor={isPositive ? "hsl(142, 76%, 45%)" : "hsl(0, 72%, 51%)"} 
+                  stopColor={isPositive ? "hsl(var(--profit))" : "hsl(var(--loss))"} 
                   stopOpacity={0.3}
                 />
                 <stop 
                   offset="95%" 
-                  stopColor={isPositive ? "hsl(142, 76%, 45%)" : "hsl(0, 72%, 51%)"} 
+                  stopColor={isPositive ? "hsl(var(--profit))" : "hsl(var(--loss))"} 
                   stopOpacity={0}
                 />
               </linearGradient>
             </defs>
             <CartesianGrid 
               strokeDasharray="3 3" 
-              stroke="hsl(222, 30%, 18%)" 
+              stroke="hsl(var(--border))" 
               vertical={false}
             />
             <XAxis 
               dataKey="date" 
-              tick={{ fill: 'hsl(215, 15%, 55%)', fontSize: 10 }}
-              axisLine={{ stroke: 'hsl(222, 30%, 18%)' }}
+              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+              axisLine={{ stroke: 'hsl(var(--border))' }}
               tickLine={false}
               interval="preserveStartEnd"
             />
             <YAxis 
-              tick={{ fill: 'hsl(215, 15%, 55%)', fontSize: 10 }}
-              axisLine={{ stroke: 'hsl(222, 30%, 18%)' }}
+              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+              axisLine={{ stroke: 'hsl(var(--border))' }}
               tickLine={false}
               tickFormatter={(value) => `$${value.toFixed(0)}`}
               width={50}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: 'hsl(222, 47%, 10%)',
-                border: '1px solid hsl(222, 30%, 18%)',
+                backgroundColor: 'hsl(var(--card))',
+                border: '1px solid hsl(var(--border))',
                 borderRadius: '8px',
                 fontSize: '12px',
               }}
-              labelStyle={{ color: 'hsl(210, 20%, 95%)' }}
+              labelStyle={{ color: 'hsl(var(--foreground))' }}
               formatter={(value: number) => [
                 `$${value.toFixed(2)}`,
                 'P&L Acumulado'
@@ -88,7 +96,7 @@ export const PnLChart = () => {
             <Area
               type="monotone"
               dataKey="pnl"
-              stroke={isPositive ? "hsl(142, 76%, 45%)" : "hsl(0, 72%, 51%)"}
+              stroke={isPositive ? "hsl(var(--profit))" : "hsl(var(--loss))"}
               strokeWidth={2}
               fill="url(#pnlGradient)"
             />
