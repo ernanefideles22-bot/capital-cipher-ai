@@ -131,9 +131,9 @@ const Index = () => {
         }
       />
       
-      <main className="container py-4 space-y-4">
+      <main className="px-3 md:px-4 lg:px-6 py-3 space-y-3 max-w-[1600px] mx-auto">
         {/* Price Tickers */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {Object.values(marketData).map((data) => (
             <PriceCard key={data.symbol} data={data} />
           ))}
@@ -144,28 +144,32 @@ const Index = () => {
           <StatsGrid stats={botStats} />
         </section>
 
-        {/* TradingView Chart */}
-        <section>
-          <TradingViewChart symbol="BTCUSDT" height={450} />
+        {/* Chart + Right Panel */}
+        <section className="grid grid-cols-1 xl:grid-cols-4 gap-3">
+          <div className="xl:col-span-3">
+            <TradingViewChart symbol="BTCUSDT" height={380} />
+          </div>
+          <div className="space-y-3">
+            <DrawdownGauge stats={botStats} config={config} />
+            <BybitConnectionPanel />
+          </div>
         </section>
 
-        {/* AI Memory Panel - Full Width */}
+        {/* AI Memory Panel */}
         <section>
           <AIMemoryPanel />
         </section>
 
         {/* Main Content Grid */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {/* Left Column - AI Learning & Trades */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-3">
             <AILearningPanel />
             <TradesTable trades={trades} />
           </div>
 
-          {/* Right Column - Bybit, AI Decisions, Drawdown, Config */}
-          <div className="space-y-4">
-            <BybitConnectionPanel />
-            {/* AI Market Analysis Button */}
+          {/* Right Column - AI Analysis, Decisions, Config */}
+          <div className="space-y-3">
             <AIMarketAnalysis 
               marketData={
                 marketData['BTCUSDT'] || {
@@ -178,63 +182,54 @@ const Index = () => {
                 }
               }
             />
-            <div className="h-[280px]">
+            <div className="h-[240px]">
               <AIDecisionsPanel decisions={aiDecisions} />
             </div>
-            <DrawdownGauge stats={botStats} config={config} />
             <ConfigPanel config={config} onUpdateConfig={updateConfig} />
           </div>
         </section>
 
-        {/* Logs Panel */}
-        <section className="h-[280px]">
-          <LogsPanel logs={logs} />
-        </section>
-
-        {/* Live News Panel */}
-        <section>
+        {/* Logs + News */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="h-[240px]">
+            <LogsPanel logs={logs} />
+          </div>
           <LiveNewsPanel />
         </section>
 
         {/* Footer */}
-        <footer className="text-center py-4 text-xs text-muted-foreground border-t border-border">
-          <div className="flex items-center justify-center gap-4 mb-2">
+        <footer className="text-center py-3 text-xs text-muted-foreground border-t border-border/50">
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
             <Button
               variant="default"
               size="sm"
               onClick={() => navigate('/performance')}
-              className="gap-2"
+              className="gap-1.5 h-8 text-xs"
             >
-              <BarChart3 className="h-4 w-4" />
-              Dashboard de Performance
+              <BarChart3 className="h-3.5 w-3.5" />
+              Performance
             </Button>
             <Button
               variant={voiceEnabled ? "secondary" : "outline"}
               size="sm"
               onClick={() => setVoiceEnabled(!voiceEnabled)}
-              className="gap-2"
+              className="gap-1.5 h-8 text-xs"
             >
-              {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-              {voiceEnabled ? 'Alertas de Voz ON' : 'Alertas de Voz OFF'}
+              {voiceEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+              {voiceEnabled ? 'Voz ON' : 'Voz OFF'}
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={handleSignOut}
-              className="gap-2"
+              className="gap-1.5 h-8 text-xs"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-3.5 w-3.5" />
               Sair
             </Button>
           </div>
-          <p className="text-sm mb-1">
-            Logado como: <span className="font-medium">{user?.email}</span>
-          </p>
-          <p>Institutional AI Trading Bot • Bybit Integration Ready</p>
-          <p className="mt-1">
-            {isConnected 
-              ? '🟢 Conectado ao bot Python via WebSocket' 
-              : '🟡 Modo demonstração - Execute o bot para dados reais'}
+          <p className="text-xs opacity-70">
+            {user?.email} • {isConnected ? '🟢 Conectado' : '🟡 Demo'}
           </p>
         </footer>
       </main>
