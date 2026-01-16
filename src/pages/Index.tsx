@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/trading/Header';
 import { PriceCard } from '@/components/trading/PriceCard';
 import { StatsGrid } from '@/components/trading/StatsGrid';
@@ -15,11 +16,12 @@ import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useVoiceAlerts } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
 import { useTradesDB } from '@/hooks/useTradesDB';
-import { Volume2, VolumeX, LogOut } from 'lucide-react';
+import { Volume2, VolumeX, LogOut, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 const Index = () => {
+  const navigate = useNavigate();
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const { announceTradeOpened, announceTradeClosed } = useVoiceAlerts({ enabled: voiceEnabled });
   const { user, signOut } = useAuth();
@@ -176,7 +178,16 @@ const Index = () => {
         <footer className="text-center py-4 text-xs text-muted-foreground border-t border-border">
           <div className="flex items-center justify-center gap-4 mb-2">
             <Button
-              variant={voiceEnabled ? "default" : "outline"}
+              variant="default"
+              size="sm"
+              onClick={() => navigate('/performance')}
+              className="gap-2"
+            >
+              <BarChart3 className="h-4 w-4" />
+              Dashboard de Performance
+            </Button>
+            <Button
+              variant={voiceEnabled ? "secondary" : "outline"}
               size="sm"
               onClick={() => setVoiceEnabled(!voiceEnabled)}
               className="gap-2"
