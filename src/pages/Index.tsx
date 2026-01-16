@@ -12,6 +12,7 @@ import { AIMemoryPanel } from '@/components/trading/AIMemoryPanel';
 import { DrawdownGauge } from '@/components/trading/DrawdownGauge';
 import { ConfigPanel } from '@/components/trading/ConfigPanel';
 import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
+import { BybitConnectionPanel } from '@/components/trading/BybitConnectionPanel';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useVoiceAlerts } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
@@ -159,9 +160,10 @@ const Index = () => {
             <TradesTable trades={trades} />
           </div>
 
-          {/* Right Column - AI Decisions, Drawdown, Config */}
+          {/* Right Column - Bybit, AI Decisions, Drawdown, Config */}
           <div className="space-y-4">
-            <div className="h-[320px]">
+            <BybitConnectionPanel />
+            <div className="h-[280px]">
               <AIDecisionsPanel decisions={aiDecisions} />
             </div>
             <DrawdownGauge stats={botStats} config={config} />
