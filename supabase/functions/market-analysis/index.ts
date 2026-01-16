@@ -1,23 +1,36 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface MarketData {
-  symbol: string;
-  price: number;
-  change24h: number;
-  volume24h: number;
-  high24h: number;
-  low24h: number;
-  rsi?: number;
-  macd?: { value: number; signal: number; histogram: number };
-  sentiment?: string;
-  news?: string[];
-}
+// Input validation schemas
+const MarketDataSchema = z.object({
+  symbol: z.string().min(1).max(20).regex(/^[A-Za-z0-9]+$/, "Symbol must be alphanumeric"),
+  price: z.number().positive(),
+  change24h: z.number(),
+  volume24h: z.number().nonnegative(),
+  high24h: z.number().positive(),
+  low24h: z.number().positive(),
+  rsi: z.number().min(0).max(100).optional(),
+  macd: z.object({
+    value: z.number(),
+    signal: z.number(),
+    histogram: z.number()
+  }).optional(),
+  sentiment: z.string().max(200).optional(),
+  news: z.array(z.string().max(500)).max(10).optional(),
+});
+
+const RequestSchema = z.object({
+  marketData: MarketDataSchema,
+  analysisType: z.enum(["full", "quick", "signals"]).optional().default("full")
+});
+
+type MarketData = z.infer<typeof MarketDataSchema>;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -51,17 +64,38 @@ serve(async (req) => {
 
     console.log(`Market analysis requested by user: ${user.id}`);
 
-    const { marketData, analysisType = "full" } = await req.json() as { 
-      marketData: MarketData; 
-      analysisType?: "full" | "quick" | "signals" 
-    };
-
-    if (!marketData || !marketData.symbol) {
+    // Validate request body with zod
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
       return new Response(
-        JSON.stringify({ error: "Market data with symbol is required" }),
+        JSON.stringify({ error: "Invalid JSON body" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const validation = RequestSchema.safeParse(body);
+    
+    if (!validation.success) {
+      console.error("Validation error:", validation.error.format());
+      return new Response(
+        JSON.stringify({ error: "Invalid input data", details: validation.error.flatten() }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { marketData, analysisType } = validation.data;
+
+    // Sanitize text fields to prevent prompt injection
+    const sanitizedMarketData: MarketData = {
+      ...marketData,
+      symbol: marketData.symbol.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+      sentiment: marketData.sentiment?.replace(/[<>{}[\]\\]/g, '').slice(0, 200),
+      news: marketData.news?.map(headline => 
+        headline.replace(/[<>{}[\]\\]/g, '').slice(0, 500)
+      )
+    };
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -98,7 +132,7 @@ Always respond in JSON format with the following structure:
   "marketCondition": "bullish" | "bearish" | "neutral" | "volatile"
 }`;
 
-    const userPrompt = buildUserPrompt(marketData, analysisType);
+    const userPrompt = buildUserPrompt(sanitizedMarketData, analysisType);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -165,7 +199,7 @@ Always respond in JSON format with the following structure:
     return new Response(
       JSON.stringify({
         success: true,
-        symbol: marketData.symbol,
+        symbol: sanitizedMarketData.symbol,
         timestamp: new Date().toISOString(),
         analysis,
       }),
