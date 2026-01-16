@@ -6,6 +6,7 @@ import { AIDecisionsPanel } from '@/components/trading/AIDecisionsPanel';
 import { LogsPanel } from '@/components/trading/LogsPanel';
 import { TradingViewChart } from '@/components/trading/TradingViewChart';
 import { AILearningPanel } from '@/components/trading/AILearningPanel';
+import { AIMemoryPanel } from '@/components/trading/AIMemoryPanel';
 import { DrawdownGauge } from '@/components/trading/DrawdownGauge';
 import { ConfigPanel } from '@/components/trading/ConfigPanel';
 import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
@@ -59,6 +60,11 @@ const Index = () => {
         {/* TradingView Chart */}
         <section>
           <TradingViewChart symbol="BTCUSDT" height={450} />
+        </section>
+
+        {/* AI Memory Panel - Full Width */}
+        <section>
+          <AIMemoryPanel />
         </section>
 
         {/* Main Content Grid */}
