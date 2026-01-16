@@ -31,17 +31,19 @@ export const useVoiceAlerts = (options: Partial<VoiceAlertOptions> = {}) => {
     utterance.volume = settings.volume;
     utterance.rate = settings.rate;
     utterance.pitch = settings.pitch;
-    utterance.lang = 'en-US';
+    utterance.lang = 'pt-BR';
 
-    // Try to get a natural sounding voice
+    // Try to get a Brazilian Portuguese voice
     const voices = window.speechSynthesis.getVoices();
     const preferredVoice = voices.find(
       (voice) =>
+        voice.lang === 'pt-BR' ||
+        voice.lang.startsWith('pt')
+    ) || voices.find(
+      (voice) =>
         voice.name.includes('Google') ||
-        voice.name.includes('Samantha') ||
-        voice.name.includes('Daniel') ||
         voice.name.includes('Microsoft')
-    ) || voices.find((voice) => voice.lang.startsWith('en'));
+    );
 
     if (preferredVoice) {
       utterance.voice = preferredVoice;
@@ -59,15 +61,17 @@ export const useVoiceAlerts = (options: Partial<VoiceAlertOptions> = {}) => {
   }, [settings.enabled, settings.volume, settings.rate, settings.pitch]);
 
   const announceTradeOpened = useCallback((symbol: string, side: 'LONG' | 'SHORT', confidence: number) => {
-    const sideText = side === 'LONG' ? 'long' : 'short';
+    const sideText = side === 'LONG' ? 'compra' : 'venda';
     const confidencePercent = Math.round(confidence * 100);
-    speak(`Opening ${sideText} position on ${formatSymbol(symbol)} with ${confidencePercent}% confidence`);
+    speak(`Abrindo posição de ${sideText} em ${formatSymbol(symbol)} com ${confidencePercent} porcento de confiança`);
   }, [speak]);
 
   const announceTradeClosed = useCallback((symbol: string, pnl: number, reason: string) => {
-    const pnlText = pnl >= 0 ? `profit of ${Math.abs(pnl).toFixed(2)} dollars` : `loss of ${Math.abs(pnl).toFixed(2)} dollars`;
-    const reasonText = reason === 'TP' ? 'take profit hit' : reason === 'SL' ? 'stop loss triggered' : 'manual exit';
-    speak(`Closed ${formatSymbol(symbol)} with ${pnlText}. ${reasonText}`);
+    const pnlText = pnl >= 0 
+      ? `lucro de ${Math.abs(pnl).toFixed(2)} dólares` 
+      : `prejuízo de ${Math.abs(pnl).toFixed(2)} dólares`;
+    const reasonText = reason === 'TP' ? 'take profit atingido' : reason === 'SL' ? 'stop loss acionado' : 'saída manual';
+    speak(`Trade de ${formatSymbol(symbol)} fechado com ${pnlText}. ${reasonText}`);
   }, [speak]);
 
   const announceAlert = useCallback((message: string) => {
@@ -83,7 +87,7 @@ export const useVoiceAlerts = (options: Partial<VoiceAlertOptions> = {}) => {
   };
 };
 
-// Helper to format symbol names for speech
+// Helper to format symbol names for speech in Portuguese
 const formatSymbol = (symbol: string): string => {
   const symbolMap: Record<string, string> = {
     'BTCUSDT': 'Bitcoin',
@@ -96,6 +100,7 @@ const formatSymbol = (symbol: string): string => {
     'DOTUSDT': 'Polkadot',
     'MATICUSDT': 'Polygon',
     'LINKUSDT': 'Chainlink',
+    'AVAXUSDT': 'Avalanche',
   };
   return symbolMap[symbol] || symbol.replace('USDT', '');
 };
