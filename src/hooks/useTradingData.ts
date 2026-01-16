@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Trade, MarketData, BotStats, AIDecision, LogEntry, BotConfig } from '@/types/trading';
 import { useWebSocket, WebSocketMessage } from './useWebSocket';
-
+import { getGlobalSentiment, type NewsSentiment } from './useNewsSentiment';
 // Voice alert callback type - will be set by Index page
 type VoiceAlertCallback = {
   onTradeOpened?: (symbol: string, side: 'LONG' | 'SHORT', confidence: number) => void;
@@ -181,7 +181,58 @@ const generateTrade = (): Trade => {
 
 const generateAIDecision = (): AIDecision => {
   const symbols = Object.keys(TRADING_PAIRS);
-  const actions: AIDecision['action'][] = ['BUY', 'SELL', 'HOLD', 'SKIP'];
+  
+  // Get current news sentiment to influence AI decisions
+  const newsSentiment = getGlobalSentiment();
+  
+  // Determine action based on news sentiment
+  let action: AIDecision['action'];
+  let confidenceBoost = 0;
+  let sentimentReasoning = '';
+  
+  if (newsSentiment.overallSentiment === 'bullish' && newsSentiment.confidence > 60) {
+    // Strong bullish sentiment - favor BUY actions
+    const rand = Math.random();
+    if (rand > 0.3) {
+      action = 'BUY';
+      confidenceBoost = (newsSentiment.confidence - 50) * 0.3; // Up to +15% confidence
+      sentimentReasoning = ' | 📰 Sentimento de notícias BULLISH (+' + Math.round(confidenceBoost) + '% confiança)';
+    } else if (rand > 0.15) {
+      action = 'HOLD';
+    } else {
+      action = 'SKIP';
+    }
+  } else if (newsSentiment.overallSentiment === 'bearish' && newsSentiment.confidence > 60) {
+    // Strong bearish sentiment - favor SELL actions
+    const rand = Math.random();
+    if (rand > 0.3) {
+      action = 'SELL';
+      confidenceBoost = (newsSentiment.confidence - 50) * 0.3; // Up to +15% confidence
+      sentimentReasoning = ' | 📰 Sentimento de notícias BEARISH (+' + Math.round(confidenceBoost) + '% confiança)';
+    } else if (rand > 0.15) {
+      action = 'HOLD';
+    } else {
+      action = 'SKIP';
+    }
+  } else {
+    // Neutral sentiment - random but more cautious
+    const actions: AIDecision['action'][] = ['BUY', 'SELL', 'HOLD', 'SKIP'];
+    const weights = [0.2, 0.2, 0.35, 0.25]; // More HOLD/SKIP when neutral
+    const rand = Math.random();
+    let cumulative = 0;
+    action = 'HOLD';
+    for (let i = 0; i < weights.length; i++) {
+      cumulative += weights[i];
+      if (rand < cumulative) {
+        action = actions[i];
+        break;
+      }
+    }
+    if (newsSentiment.overallSentiment === 'neutral') {
+      sentimentReasoning = ' | 📰 Mercado neutro, aguardando sinais';
+    }
+  }
+  
   const reasonings = [
     'Acúmulo institucional detectado com volume crescente',
     'Distribuição em zona premium, aguardando confirmação',
@@ -191,18 +242,33 @@ const generateAIDecision = (): AIDecision => {
     'Liquidity grab detectado, possível reversão',
   ];
   
+  const baseReasoning = reasonings[Math.floor(Math.random() * reasonings.length)];
+  const baseConfidence = Math.random() * 35 + 55; // 55-90%
+  
+  // Adjust institutional flow based on sentiment
+  let institutionalFlow = Math.random() * 200 - 100;
+  if (newsSentiment.overallSentiment === 'bullish') {
+    institutionalFlow = Math.abs(institutionalFlow) * 0.5 + 20; // Positive flow
+  } else if (newsSentiment.overallSentiment === 'bearish') {
+    institutionalFlow = -Math.abs(institutionalFlow) * 0.5 - 20; // Negative flow
+  }
+  
   return {
     id: crypto.randomUUID(),
     timestamp: new Date(),
     symbol: symbols[Math.floor(Math.random() * symbols.length)],
-    action: actions[Math.floor(Math.random() * actions.length)],
-    confidence: Math.random() * 40 + 60,
-    reasoning: reasonings[Math.floor(Math.random() * reasonings.length)],
+    action,
+    confidence: Math.min(98, baseConfidence + confidenceBoost),
+    reasoning: baseReasoning + sentimentReasoning,
     indicators: {
-      institutionalFlow: Math.random() * 200 - 100,
+      institutionalFlow,
       volumeCluster: Math.random() > 0.5,
-      trendStrength: Math.random() * 100,
-      riskScore: Math.random() * 100,
+      trendStrength: newsSentiment.overallSentiment === 'neutral' 
+        ? Math.random() * 50 + 20 
+        : Math.random() * 40 + 50, // Higher trend strength when sentiment is clear
+      riskScore: newsSentiment.overallSentiment === 'neutral'
+        ? Math.random() * 40 + 40 // Higher risk when neutral
+        : Math.random() * 30 + 20, // Lower risk when sentiment is clear
     },
   };
 };
