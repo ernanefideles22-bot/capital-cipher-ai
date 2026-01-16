@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { useTradesDB } from '@/hooks/useTradesDB';
+import { exportToCSV, exportToExcel, exportSummaryToCSV } from '@/utils/exportTrades';
 import { 
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
-import { ArrowLeft, TrendingUp, TrendingDown, Target, Activity, Calendar, DollarSign } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Target, Activity, Download, DollarSign, FileSpreadsheet } from 'lucide-react';
+import { toast } from 'sonner';
 import type { Trade } from '@/types/trading';
 
 const COLORS = ['#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
@@ -138,13 +140,65 @@ const Performance = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container py-4 flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">Dashboard de Performance</h1>
-            <p className="text-sm text-muted-foreground">Análise detalhada dos seus trades</p>
+        <div className="container py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold">Dashboard de Performance</h1>
+              <p className="text-sm text-muted-foreground">Análise detalhada dos seus trades</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                exportToCSV(trades, 'trades');
+                toast.success('Trades exportados para CSV!');
+              }}
+              disabled={trades.length === 0}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                exportToExcel(trades, 'trades');
+                toast.success('Trades exportados para Excel!');
+              }}
+              disabled={trades.length === 0}
+              className="gap-2"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Excel
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => {
+                exportSummaryToCSV({
+                  totalPnL,
+                  winRate,
+                  totalTrades: closedTrades.length,
+                  profitFactor,
+                  avgWin,
+                  avgLoss,
+                  bestTrade,
+                  worstTrade
+                }, 'performance_summary');
+                toast.success('Resumo exportado!');
+              }}
+              disabled={trades.length === 0}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Exportar Resumo
+            </Button>
           </div>
         </div>
       </header>
