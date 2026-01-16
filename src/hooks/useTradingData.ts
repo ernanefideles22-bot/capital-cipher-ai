@@ -2,6 +2,18 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Trade, MarketData, BotStats, AIDecision, LogEntry, BotConfig } from '@/types/trading';
 import { useWebSocket, WebSocketMessage } from './useWebSocket';
 
+// Voice alert callback type - will be set by Index page
+type VoiceAlertCallback = {
+  onTradeOpened?: (symbol: string, side: 'LONG' | 'SHORT', confidence: number) => void;
+  onTradeClosed?: (symbol: string, pnl: number, reason: string) => void;
+};
+
+let voiceCallbacks: VoiceAlertCallback = {};
+
+export const setVoiceAlertCallbacks = (callbacks: VoiceAlertCallback) => {
+  voiceCallbacks = callbacks;
+};
+
 // WebSocket URL - configure this to match your Python bot
 const WS_URL = import.meta.env.VITE_BOT_WS_URL || 'ws://localhost:8765';
 
@@ -485,6 +497,10 @@ export const useTradingData = () => {
             }), 
             ...prev.slice(0, 99)
           ]);
+          
+          // Voice alert for trade closed
+          const reason = isProfit ? 'TP' : 'SL';
+          voiceCallbacks.onTradeClosed?.(trade.symbol, trade.pnl || 0, reason);
         });
         
         setTrades(prev => [...closedTrades, ...prev.slice(0, 49)]);
@@ -515,6 +531,9 @@ export const useTradingData = () => {
               }), 
               ...prev.slice(0, 99)
             ]);
+            
+            // Voice alert for trade opened
+            voiceCallbacks.onTradeOpened?.(newTrade.symbol, newTrade.side, decision.confidence / 100);
             
             setTrades(prev => [newTrade, ...prev.slice(0, 49)]);
           }
