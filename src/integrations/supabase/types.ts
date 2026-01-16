@@ -14,7 +14,144 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bot_stats: {
+        Row: {
+          daily_pnl: number | null
+          id: string
+          max_drawdown: number | null
+          monthly_pnl: number | null
+          total_pnl: number | null
+          total_trades: number | null
+          updated_at: string
+          user_id: string
+          weekly_pnl: number | null
+          win_count: number | null
+        }
+        Insert: {
+          daily_pnl?: number | null
+          id?: string
+          max_drawdown?: number | null
+          monthly_pnl?: number | null
+          total_pnl?: number | null
+          total_trades?: number | null
+          updated_at?: string
+          user_id: string
+          weekly_pnl?: number | null
+          win_count?: number | null
+        }
+        Update: {
+          daily_pnl?: number | null
+          id?: string
+          max_drawdown?: number | null
+          monthly_pnl?: number | null
+          total_pnl?: number | null
+          total_trades?: number | null
+          updated_at?: string
+          user_id?: string
+          weekly_pnl?: number | null
+          win_count?: number | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          bot_config: Json | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+          voice_alerts_enabled: boolean | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          bot_config?: Json | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+          voice_alerts_enabled?: boolean | null
+        }
+        Update: {
+          avatar_url?: string | null
+          bot_config?: Json | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+          voice_alerts_enabled?: boolean | null
+        }
+        Relationships: []
+      }
+      trades: {
+        Row: {
+          ai_confidence: number | null
+          ai_reasoning: string | null
+          closed_at: string | null
+          created_at: string
+          entry_price: number
+          exit_price: number | null
+          id: string
+          leverage: number | null
+          opened_at: string
+          pnl: number | null
+          pnl_percentage: number | null
+          quantity: number
+          side: string
+          status: string
+          stop_loss: number | null
+          strategy: string | null
+          symbol: string
+          take_profit: number | null
+          user_id: string
+        }
+        Insert: {
+          ai_confidence?: number | null
+          ai_reasoning?: string | null
+          closed_at?: string | null
+          created_at?: string
+          entry_price: number
+          exit_price?: number | null
+          id?: string
+          leverage?: number | null
+          opened_at?: string
+          pnl?: number | null
+          pnl_percentage?: number | null
+          quantity: number
+          side: string
+          status?: string
+          stop_loss?: number | null
+          strategy?: string | null
+          symbol: string
+          take_profit?: number | null
+          user_id: string
+        }
+        Update: {
+          ai_confidence?: number | null
+          ai_reasoning?: string | null
+          closed_at?: string | null
+          created_at?: string
+          entry_price?: number
+          exit_price?: number | null
+          id?: string
+          leverage?: number | null
+          opened_at?: string
+          pnl?: number | null
+          pnl_percentage?: number | null
+          quantity?: number
+          side?: string
+          status?: string
+          stop_loss?: number | null
+          strategy?: string | null
+          symbol?: string
+          take_profit?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
