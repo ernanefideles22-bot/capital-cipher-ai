@@ -115,38 +115,38 @@ export const TradingViewChart = ({
       chartRef.current.remove();
     }
 
-    // Create chart with TradingView-like styling
+    // Create chart with TradingView-like styling (using hex colors - lightweight-charts doesn't support HSL)
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { color: 'transparent' },
-        textColor: 'hsl(215, 15%, 55%)',
+        textColor: '#6b7280',
         fontFamily: 'JetBrains Mono, monospace',
       },
       grid: {
-        vertLines: { color: 'hsl(222, 30%, 15%)' },
-        horzLines: { color: 'hsl(222, 30%, 15%)' },
+        vertLines: { color: '#1e293b' },
+        horzLines: { color: '#1e293b' },
       },
       crosshair: {
         mode: 1,
         vertLine: {
-          color: 'hsl(215, 85%, 50%)',
+          color: '#3b82f6',
           width: 1,
           style: 2,
-          labelBackgroundColor: 'hsl(215, 85%, 50%)',
+          labelBackgroundColor: '#3b82f6',
         },
         horzLine: {
-          color: 'hsl(215, 85%, 50%)',
+          color: '#3b82f6',
           width: 1,
           style: 2,
-          labelBackgroundColor: 'hsl(215, 85%, 50%)',
+          labelBackgroundColor: '#3b82f6',
         },
       },
       rightPriceScale: {
-        borderColor: 'hsl(222, 30%, 18%)',
+        borderColor: '#334155',
         scaleMargins: { top: 0.1, bottom: 0.2 },
       },
       timeScale: {
-        borderColor: 'hsl(222, 30%, 18%)',
+        borderColor: '#334155',
         timeVisible: true,
         secondsVisible: false,
       },
