@@ -1,1 +1,4 @@
 project_id = "nrhdicsaqtjrrvlybfkl"
+
+[functions.bybit-api]
+verify_jwt = false

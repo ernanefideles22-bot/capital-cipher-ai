@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 import { encode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +62,30 @@ async function bybitRequest(endpoint: string, method: string = "GET", params: Re
   return await response.json();
 }
 
+// Authenticate user via JWT
+async function authenticateUser(req: Request): Promise<{ userId: string } | null> {
+  const authHeader = req.headers.get("Authorization");
+  
+  if (!authHeader?.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const supabaseClient = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const token = authHeader.replace("Bearer ", "");
+  const { data, error } = await supabaseClient.auth.getClaims(token);
+  
+  if (error || !data?.claims?.sub) {
+    return null;
+  }
+
+  return { userId: data.claims.sub as string };
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -68,6 +93,29 @@ serve(async (req) => {
   }
 
   try {
+    // Verify user authentication
+    const auth = await authenticateUser(req);
+    if (!auth) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized", retCode: -1 }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Check if Bybit API credentials are configured
+    if (!BYBIT_API_KEY || !BYBIT_API_SECRET) {
+      return new Response(
+        JSON.stringify({ error: "API credentials not configured", retCode: -1 }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const { action, params = {} } = await req.json();
 
     let result;
@@ -173,10 +221,18 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error("Bybit API error:", errorMessage);
+    // Never log or expose sensitive information in errors
+    const errorMessage = error instanceof Error ? error.message : "Request failed";
+    
+    // Sanitize error message to prevent credential leakage
+    const safeErrorMessage = errorMessage
+      .replace(new RegExp(BYBIT_API_KEY, 'g'), '[REDACTED]')
+      .replace(new RegExp(BYBIT_API_SECRET, 'g'), '[REDACTED]');
+    
+    console.error("Bybit API error occurred");
+    
     return new Response(
-      JSON.stringify({ error: errorMessage, retCode: -1 }),
+      JSON.stringify({ error: safeErrorMessage, retCode: -1 }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
