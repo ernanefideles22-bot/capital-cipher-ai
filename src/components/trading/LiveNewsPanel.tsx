@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Newspaper, TrendingUp, TrendingDown, Minus, RefreshCw, ExternalLink, AlertCircle } from 'lucide-react';
+import { Newspaper, TrendingUp, TrendingDown, Minus, RefreshCw, ExternalLink, AlertCircle, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { updateGlobalSentiment } from '@/hooks/useNewsSentiment';
 
 interface NewsItem {
   id: string;
@@ -95,14 +96,26 @@ export const LiveNewsPanel = () => {
         }
       }
       
+      const summary = overallSentiment === 'bullish' 
+        ? 'Fluxo de notícias predominantemente positivo. IA favorecerá posições LONG.'
+        : overallSentiment === 'bearish'
+        ? 'Notícias indicam cautela. IA favorecerá posições SHORT.'
+        : 'Mercado em consolidação. IA aguardará sinais mais claros.';
+      
       setAiAnalysis({
         overallSentiment,
         confidence,
-        summary: overallSentiment === 'bullish' 
-          ? 'Fluxo de notícias predominantemente positivo. Tendência de alta identificada.'
-          : overallSentiment === 'bearish'
-          ? 'Notícias indicam cautela. Possível pressão vendedora.'
-          : 'Mercado em consolidação. Aguardar sinais mais claros.'
+        summary
+      });
+      
+      // Update global sentiment for AI trading decisions
+      updateGlobalSentiment({
+        overallSentiment,
+        confidence,
+        summary,
+        bullishCount,
+        bearishCount,
+        totalNews: newNews.length,
       });
     } catch (error) {
       console.error('Error fetching news:', error);
@@ -153,11 +166,15 @@ export const LiveNewsPanel = () => {
   };
 
   return (
-    <Card className="glass-card">
+    <Card className="glass-card border-primary/20">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
           <Newspaper className="h-4 w-4 text-primary" />
           <CardTitle className="text-sm font-medium">📰 Notícias ao Vivo • Análise IA</CardTitle>
+          <Badge variant="outline" className="text-[10px] border-primary/50 text-primary gap-1">
+            <Brain className="h-3 w-3" />
+            Influenciando Trades
+          </Badge>
         </div>
         <div className="flex items-center gap-2">
           {aiAnalysis && (
