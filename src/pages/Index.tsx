@@ -13,6 +13,7 @@ import { DrawdownGauge } from '@/components/trading/DrawdownGauge';
 import { ConfigPanel } from '@/components/trading/ConfigPanel';
 import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
 import { BybitConnectionPanel } from '@/components/trading/BybitConnectionPanel';
+import { LiveNewsPanel } from '@/components/trading/LiveNewsPanel';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useVoiceAlerts } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
@@ -174,6 +175,11 @@ const Index = () => {
         {/* Logs Panel */}
         <section className="h-[280px]">
           <LogsPanel logs={logs} />
+        </section>
+
+        {/* Live News Panel */}
+        <section>
+          <LiveNewsPanel />
         </section>
 
         {/* Footer */}
