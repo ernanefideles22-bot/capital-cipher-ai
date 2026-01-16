@@ -14,6 +14,7 @@ import { ConfigPanel } from '@/components/trading/ConfigPanel';
 import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
 import { BybitConnectionPanel } from '@/components/trading/BybitConnectionPanel';
 import { LiveNewsPanel } from '@/components/trading/LiveNewsPanel';
+import { AIMarketAnalysis } from '@/components/trading/AIMarketAnalysis';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useVoiceAlerts } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
@@ -164,6 +165,19 @@ const Index = () => {
           {/* Right Column - Bybit, AI Decisions, Drawdown, Config */}
           <div className="space-y-4">
             <BybitConnectionPanel />
+            {/* AI Market Analysis Button */}
+            <AIMarketAnalysis 
+              marketData={
+                marketData['BTCUSDT'] || {
+                  symbol: 'BTCUSDT',
+                  price: 0,
+                  change24h: 0,
+                  volume24h: 0,
+                  high24h: 0,
+                  low24h: 0,
+                }
+              }
+            />
             <div className="h-[280px]">
               <AIDecisionsPanel decisions={aiDecisions} />
             </div>
