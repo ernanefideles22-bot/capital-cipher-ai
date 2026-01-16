@@ -5,9 +5,23 @@ import { useWebSocket, WebSocketMessage } from './useWebSocket';
 // WebSocket URL - configure this to match your Python bot
 const WS_URL = import.meta.env.VITE_BOT_WS_URL || 'ws://localhost:8765';
 
+// All trading pairs with their base prices
+const TRADING_PAIRS: Record<string, number> = {
+  'BTCUSDT': 95000,
+  'ETHUSDT': 3200,
+  'SOLUSDT': 180,
+  'BNBUSDT': 680,
+  'XRPUSDT': 2.15,
+  'DOGEUSDT': 0.32,
+  'ADAUSDT': 0.95,
+  'AVAXUSDT': 38,
+  'LINKUSDT': 22,
+  'MATICUSDT': 0.48,
+};
+
 // Fallback simulated data generators (used when not connected)
 const generateMarketData = (symbol: string): MarketData => {
-  const basePrice = symbol === 'BTCUSDT' ? 95000 : symbol === 'ETHUSDT' ? 3200 : 180;
+  const basePrice = TRADING_PAIRS[symbol] || 100;
   const variation = (Math.random() - 0.5) * basePrice * 0.002;
   const price = basePrice + variation;
   const change24h = (Math.random() - 0.5) * basePrice * 0.05;
@@ -43,11 +57,11 @@ const generateLogEntry = (): LogEntry => {
 };
 
 const generateTrade = (): Trade => {
-  const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+  const symbols = Object.keys(TRADING_PAIRS);
   const strategies: Trade['strategy'][] = ['SCALP', 'DAYTRADE', 'SWING'];
   const sides: Trade['side'][] = ['LONG', 'SHORT'];
   const symbol = symbols[Math.floor(Math.random() * symbols.length)];
-  const basePrice = symbol === 'BTCUSDT' ? 95000 : symbol === 'ETHUSDT' ? 3200 : 180;
+  const basePrice = TRADING_PAIRS[symbol];
   const entryPrice = basePrice * (1 + (Math.random() - 0.5) * 0.01);
   const side = sides[Math.floor(Math.random() * sides.length)];
   const pnlMultiplier = side === 'LONG' ? 1 : -1;
@@ -73,12 +87,15 @@ const generateTrade = (): Trade => {
 };
 
 const generateAIDecision = (): AIDecision => {
-  const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+  const symbols = Object.keys(TRADING_PAIRS);
   const actions: AIDecision['action'][] = ['BUY', 'SELL', 'HOLD', 'SKIP'];
   const reasonings = [
     'Acúmulo institucional detectado com volume crescente',
     'Distribuição em zona premium, aguardando confirmação',
     'Quebra de estrutura com volume validado',
+    'Divergência de volume identificada, sinal de reversão',
+    'Suporte forte com rejeição de preço',
+    'Liquidity grab detectado, possível reversão',
   ];
   
   return {
@@ -124,7 +141,7 @@ export const useTradingData = () => {
     maxDrawdown: 10,
     maxConcurrentTrades: 3,
     riskPerTrade: 2,
-    assets: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
+    assets: Object.keys(TRADING_PAIRS),
   });
 
   const simulationRef = useRef<NodeJS.Timeout | null>(null);
@@ -306,8 +323,8 @@ export const useTradingData = () => {
   const startSimulation = useCallback(() => {
     if (simulationRef.current) return;
 
-    // Initialize with simulated data
-    const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+    // Initialize with simulated data for all pairs
+    const symbols = Object.keys(TRADING_PAIRS);
     const initialMarket: Record<string, MarketData> = {};
     symbols.forEach(symbol => {
       initialMarket[symbol] = generateMarketData(symbol);
@@ -330,7 +347,7 @@ export const useTradingData = () => {
     });
 
     simulationRef.current = setInterval(() => {
-      // Update market data
+      // Update market data for all pairs
       setMarketData(prev => {
         const updated = { ...prev };
         symbols.forEach(symbol => {
