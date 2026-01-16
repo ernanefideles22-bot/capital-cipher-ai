@@ -13,12 +13,18 @@ import { ConfigPanel } from '@/components/trading/ConfigPanel';
 import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useVoiceAlerts } from '@/hooks/useVoiceAlerts';
-import { Volume2, VolumeX } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useTradesDB } from '@/hooks/useTradesDB';
+import { Volume2, VolumeX, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 const Index = () => {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const { announceTradeOpened, announceTradeClosed } = useVoiceAlerts({ enabled: voiceEnabled });
+  const { user, signOut } = useAuth();
+  const { saveTrade, loadTrades, updateBotStats } = useTradesDB(user?.id);
+  const [dbTradesLoaded, setDbTradesLoaded] = useState(false);
   
   const { 
     marketData, 
@@ -35,6 +41,54 @@ const Index = () => {
     reconnect,
   } = useTradingData();
 
+  // Load trades from database on mount
+  useEffect(() => {
+    if (user && !dbTradesLoaded) {
+      loadTrades().then(({ data, error }) => {
+        if (error) {
+          console.error('Error loading trades:', error);
+        } else if (data && data.length > 0) {
+          toast.success(`${data.length} trades carregados do histórico`);
+        }
+        setDbTradesLoaded(true);
+      });
+    }
+  }, [user, dbTradesLoaded, loadTrades]);
+
+  // Save new trades to database
+  useEffect(() => {
+    if (!user || !dbTradesLoaded) return;
+    
+    // Save closed trades to database
+    const closedTrades = trades.filter(t => t.status === 'CLOSED' && t.closedAt);
+    closedTrades.forEach(trade => {
+      // Only save trades that are recent (within last 5 seconds)
+      const isRecent = trade.closedAt && (Date.now() - trade.closedAt.getTime()) < 5000;
+      if (isRecent) {
+        saveTrade(trade).catch(console.error);
+      }
+    });
+  }, [trades, user, dbTradesLoaded, saveTrade]);
+
+  // Update bot stats in database periodically
+  useEffect(() => {
+    if (!user) return;
+    
+    const interval = setInterval(() => {
+      updateBotStats({
+        totalTrades: botStats.totalTrades,
+        winCount: Math.round(botStats.totalTrades * (botStats.winRate / 100)),
+        totalPnl: botStats.totalPnL,
+        dailyPnl: botStats.dailyPnL,
+        weeklyPnl: botStats.weeklyPnL,
+        monthlyPnl: botStats.monthlyPnL,
+        maxDrawdown: botStats.maxDrawdown,
+      }).catch(console.error);
+    }, 30000); // Update every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [user, botStats, updateBotStats]);
+
   // Set up voice alert callbacks
   useEffect(() => {
     setVoiceAlertCallbacks({
@@ -50,6 +104,11 @@ const Index = () => {
       },
     });
   }, [voiceEnabled, announceTradeOpened, announceTradeClosed]);
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success('Logout realizado com sucesso');
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,9 +182,21 @@ const Index = () => {
               className="gap-2"
             >
               {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-              {voiceEnabled ? 'Voice Alerts ON' : 'Voice Alerts OFF'}
+              {voiceEnabled ? 'Alertas de Voz ON' : 'Alertas de Voz OFF'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSignOut}
+              className="gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
             </Button>
           </div>
+          <p className="text-sm mb-1">
+            Logado como: <span className="font-medium">{user?.email}</span>
+          </p>
           <p>Institutional AI Trading Bot • Bybit Integration Ready</p>
           <p className="mt-1">
             {isConnected 
