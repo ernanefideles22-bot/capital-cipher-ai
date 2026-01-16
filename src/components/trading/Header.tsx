@@ -1,5 +1,7 @@
-import { Activity, Settings, Wifi, WifiOff } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Activity, Settings, Wifi, WifiOff, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { BotStats, BotConfig } from '@/types/trading';
 import { cn } from '@/lib/utils';
 import { ReactNode } from 'react';
@@ -73,6 +75,16 @@ export const Header = ({ stats, config, onToggleBot, connectionStatus }: HeaderP
           {isRunning ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
           <span className="hidden sm:inline">{isRunning ? 'Pausar' : 'Iniciar'}</span>
         </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link to="/backtesting">
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent">
+                <FlaskConical className="w-5 h-5" />
+              </Button>
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent>Backtesting Visual</TooltipContent>
+        </Tooltip>
         <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
           <Settings className="w-5 h-5" />
         </Button>
