@@ -49,6 +49,13 @@ export const AIMarketAnalysis = ({ marketData }: AIMarketAnalysisProps) => {
     setError(null);
 
     try {
+      // Check if user is authenticated first
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('Você precisa estar logado para usar a análise de IA');
+      }
+
       const { data, error: fnError } = await supabase.functions.invoke('market-analysis', {
         body: {
           marketData: {
