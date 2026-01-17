@@ -49,26 +49,46 @@ export const AIMarketAnalysis = ({ marketData }: AIMarketAnalysisProps) => {
     setError(null);
 
     try {
-      // Check if user is authenticated first
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
+      // Get current session (can exist even if the access token is stale)
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
         throw new Error('Você precisa estar logado para usar a análise de IA');
       }
 
-      const { data, error: fnError } = await supabase.functions.invoke('market-analysis', {
-        body: {
-          marketData: {
-            symbol: marketData.symbol,
-            price: marketData.price,
-            change24h: marketData.change24h,
-            volume24h: marketData.volume24h,
-            high24h: marketData.high24h,
-            low24h: marketData.low24h,
+      const invoke = (accessToken: string) =>
+        supabase.functions.invoke('market-analysis', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          body: {
+            marketData: {
+              symbol: marketData.symbol,
+              price: marketData.price,
+              change24h: marketData.change24h,
+              volume24h: marketData.volume24h,
+              high24h: marketData.high24h,
+              low24h: marketData.low24h,
+            },
+            analysisType: 'full',
           },
-          analysisType: 'full',
-        },
-      });
+        });
+
+      let result = await invoke(session.access_token);
+
+      // If the token is expired/invalid, refresh silently and retry once
+      const status = (result.error as any)?.context?.status ?? (result.error as any)?.status;
+      if (result.error && (status === 401 || /unauthorized|401/i.test(result.error.message))) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+
+        if (refreshError || !refreshed.session?.access_token) {
+          throw new Error('Sua sessão expirou. Reautentique para continuar.');
+        }
+
+        result = await invoke(refreshed.session.access_token);
+      }
+
+      const { data, error: fnError } = result;
 
       if (fnError) throw fnError;
 
