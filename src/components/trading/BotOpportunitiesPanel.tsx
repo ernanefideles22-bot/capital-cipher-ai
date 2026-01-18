@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Target, Shield, Zap, Brain, Loader2, BarChart2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,7 @@ interface BotOpportunitiesPanelProps {
   onAnalyzeNow: () => void;
   onExecuteOpportunity?: (opportunity: BotOpportunity) => void;
   marketPrices?: Record<string, number>;
+  lastExecutedSymbol?: string | null; // Auto-expand chart for this symbol
 }
 
 export const BotOpportunitiesPanel = ({
@@ -27,8 +28,16 @@ export const BotOpportunitiesPanel = ({
   onAnalyzeNow,
   onExecuteOpportunity,
   marketPrices = {},
+  lastExecutedSymbol,
 }: BotOpportunitiesPanelProps) => {
   const [expandedChart, setExpandedChart] = useState<string | null>(null);
+
+  // Auto-expand chart when a trade is executed
+  useEffect(() => {
+    if (lastExecutedSymbol) {
+      setExpandedChart(lastExecutedSymbol);
+    }
+  }, [lastExecutedSymbol]);
   const formatPrice = (price: number) => {
     if (price >= 1000) {
       return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
