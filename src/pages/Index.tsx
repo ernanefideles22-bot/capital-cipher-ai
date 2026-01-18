@@ -17,6 +17,7 @@ import { AIMarketAnalysis } from '@/components/trading/AIMarketAnalysis';
 import { BybitPositionsPanel } from '@/components/trading/BybitPositionsPanel';
 import { BybitOrdersPanel } from '@/components/trading/BybitOrdersPanel';
 import { BotOpportunitiesPanel } from '@/components/trading/BotOpportunitiesPanel';
+import { ActiveTradesWidget } from '@/components/trading/ActiveTradesWidget';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useRealTradingData } from '@/hooks/useRealTradingData';
 import { useVoiceAlerts, playVoiceToggleSound } from '@/hooks/useVoiceAlerts';
@@ -271,48 +272,58 @@ const Index = () => {
       <main className="px-3 md:px-4 lg:px-6 py-3 space-y-3 max-w-[1600px] mx-auto">
         {/* Mode Indicator Banner with Bot Control */}
         {isRealMode && (
-          <div className="bg-profit/10 border border-profit/30 rounded-lg p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${autonomousBot.isRunning ? 'bg-profit animate-pulse' : 'bg-muted'}`} />
-              <span className="text-sm font-medium text-profit">
-                {autonomousBot.isRunning ? 'Bot IA Autônomo - Analisando todos os pares' : 'Modo Conta Real'}
-              </span>
-              {autonomousBot.isAnalyzing && (
-                <Badge variant="outline" className="border-primary text-primary gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Analisando...
-                </Badge>
-              )}
-              {autonomousBot.opportunities.length > 0 && (
-                <Badge variant="outline" className="border-profit text-profit">
-                  {autonomousBot.opportunities.length} oportunidades
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant={autonomousBot.isRunning ? 'destructive' : 'default'}
-                onClick={toggleBotStatus}
-                disabled={autonomousBot.isAnalyzing}
-                className="h-7 px-3 gap-1.5"
-              >
-                {autonomousBot.isRunning ? (
-                  <>
-                    <Pause className="w-3 h-3" />
-                    Parar Bot
-                  </>
-                ) : (
-                  <>
-                    <Brain className="w-3 h-3" />
-                    Iniciar Bot IA
-                  </>
+          <div className="bg-profit/10 border border-profit/30 rounded-lg p-3 space-y-3">
+            {/* Top Row - Bot Status & Controls */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${autonomousBot.isRunning ? 'bg-profit animate-pulse' : 'bg-muted'}`} />
+                <span className="text-sm font-medium text-profit">
+                  {autonomousBot.isRunning ? 'Bot IA Autônomo - Analisando todos os pares' : 'Modo Conta Real'}
+                </span>
+                {autonomousBot.isAnalyzing && (
+                  <Badge variant="outline" className="border-primary text-primary gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Analisando...
+                  </Badge>
                 )}
-              </Button>
-              <Badge variant="outline" className="border-profit text-profit">
-                Saldo: ${wallet?.totalEquity.toLocaleString('en-US', { maximumFractionDigits: 2 }) ?? '--'}
-              </Badge>
+                {autonomousBot.opportunities.length > 0 && (
+                  <Badge variant="outline" className="border-profit text-profit">
+                    {autonomousBot.opportunities.length} oportunidades
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={autonomousBot.isRunning ? 'destructive' : 'default'}
+                  onClick={toggleBotStatus}
+                  disabled={autonomousBot.isAnalyzing}
+                  className="h-7 px-3 gap-1.5"
+                >
+                  {autonomousBot.isRunning ? (
+                    <>
+                      <Pause className="w-3 h-3" />
+                      Parar Bot
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="w-3 h-3" />
+                      Iniciar Bot IA
+                    </>
+                  )}
+                </Button>
+                <Badge variant="outline" className="border-profit text-profit">
+                  Saldo: ${wallet?.totalEquity.toLocaleString('en-US', { maximumFractionDigits: 2 }) ?? '--'}
+                </Badge>
+              </div>
             </div>
+
+            {/* Active Trades Widget - Real-time P&L */}
+            {positions.length > 0 && (
+              <div className="pt-2 border-t border-profit/20">
+                <ActiveTradesWidget positions={positions} />
+              </div>
+            )}
           </div>
         )}
 
