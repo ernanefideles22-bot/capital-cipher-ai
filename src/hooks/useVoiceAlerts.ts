@@ -1,4 +1,5 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
+import { getVoiceSettings } from '@/components/trading/VoiceSettingsPanel';
 
 interface VoiceAlertOptions {
   enabled: boolean;
@@ -6,6 +7,7 @@ interface VoiceAlertOptions {
   rate: number;
   pitch: number;
   useElevenLabs: boolean;
+  voiceId: string;
 }
 
 const defaultOptions: VoiceAlertOptions = {
@@ -13,7 +15,8 @@ const defaultOptions: VoiceAlertOptions = {
   volume: 1,
   rate: 1,
   pitch: 1,
-  useElevenLabs: true, // Use ElevenLabs by default
+  useElevenLabs: true,
+  voiceId: 'EXAVITQu4vr4xnSDxMaL',
 };
 
 // Audio context for playing beep sounds
@@ -64,7 +67,7 @@ export const playVoiceToggleSound = (enabled: boolean) => {
 };
 
 // ElevenLabs TTS function
-const speakWithElevenLabs = async (text: string, volume: number = 1): Promise<boolean> => {
+const speakWithElevenLabs = async (text: string, volume: number = 1, voiceId?: string): Promise<boolean> => {
   try {
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
@@ -75,7 +78,7 @@ const speakWithElevenLabs = async (text: string, volume: number = 1): Promise<bo
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, voiceId }),
       }
     );
 
@@ -91,8 +94,12 @@ const speakWithElevenLabs = async (text: string, volume: number = 1): Promise<bo
       const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
       const audio = new Audio(audioUrl);
       audio.volume = volume;
-      await audio.play();
-      return true;
+      
+      return new Promise((resolve) => {
+        audio.onended = () => resolve(true);
+        audio.onerror = () => resolve(false);
+        audio.play().catch(() => resolve(false));
+      });
     }
     
     return false;
@@ -132,10 +139,27 @@ const speakWithBrowser = (text: string, settings: VoiceAlertOptions): void => {
 };
 
 export const useVoiceAlerts = (options: Partial<VoiceAlertOptions> = {}) => {
-  const settings = { ...defaultOptions, ...options };
+  // Load settings from localStorage on mount and when they change
+  const [savedSettings, setSavedSettings] = useState(getVoiceSettings);
+  
+  // Merge options with saved settings
+  const settings = { 
+    ...defaultOptions, 
+    ...savedSettings,
+    ...options,
+  };
+  
   const isSpeaking = useRef(false);
   const audioQueue = useRef<string[]>([]);
   const isProcessingQueue = useRef(false);
+
+  // Refresh settings periodically (in case they change in settings page)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSavedSettings(getVoiceSettings());
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   const processQueue = useCallback(async () => {
     if (isProcessingQueue.current || audioQueue.current.length === 0) return;
@@ -149,7 +173,7 @@ export const useVoiceAlerts = (options: Partial<VoiceAlertOptions> = {}) => {
       isSpeaking.current = true;
       
       if (settings.useElevenLabs) {
-        const success = await speakWithElevenLabs(text, settings.volume);
+        const success = await speakWithElevenLabs(text, settings.volume, settings.voiceId);
         if (!success) {
           // Fallback to browser TTS
           speakWithBrowser(text, settings);

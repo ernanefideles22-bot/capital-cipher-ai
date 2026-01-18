@@ -1,7 +1,8 @@
-import { ArrowLeft, Settings } from 'lucide-react';
+import { ArrowLeft, Settings, Volume2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ConfigPanel } from '@/components/trading/ConfigPanel';
 import { BybitConnectionPanel } from '@/components/trading/BybitConnectionPanel';
+import { VoiceSettingsPanel } from '@/components/trading/VoiceSettingsPanel';
 import { useTradingData } from '@/hooks/useTradingData';
 import { useBybitAccount } from '@/hooks/useBybitAccount';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,17 @@ const SettingsPage = () => {
           </h2>
           <div className="max-w-xl">
             <ConfigPanel config={config} onUpdateConfig={updateConfig} />
+          </div>
+        </section>
+
+        {/* Voice Settings */}
+        <section>
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Volume2 className="w-5 h-5 text-muted-foreground" />
+            Configurações de Voz
+          </h2>
+          <div className="max-w-xl">
+            <VoiceSettingsPanel />
           </div>
         </section>
 
