@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.trading-ai]
 verify_jwt = false
+
+[functions.neural-training]
+verify_jwt = false
+
+[functions.elevenlabs-tts]
+verify_jwt = false
