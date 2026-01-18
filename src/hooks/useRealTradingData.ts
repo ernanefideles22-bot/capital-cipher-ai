@@ -263,12 +263,48 @@ export function useRealTradingData(userId: string | undefined) {
     });
   }, []);
 
-  // Load data on mount
+  // Load data on mount and set up realtime subscription
   useEffect(() => {
-    if (userId) {
-      loadTrades();
-    }
-  }, [userId, loadTrades]);
+    if (!userId) return;
+    
+    // Initial load
+    loadTrades();
+    
+    // Set up Supabase Realtime subscription for trades
+    const channel = supabase
+      .channel(`trades-realtime-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'trades',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          console.log('Realtime trade update:', payload);
+          // Reload trades when any change occurs
+          loadTrades();
+          
+          if (payload.eventType === 'INSERT') {
+            addLog('SUCCESS', `🔔 Nova trade detectada em tempo real`);
+          } else if (payload.eventType === 'UPDATE') {
+            addLog('INFO', `🔄 Trade atualizada em tempo real`);
+          } else if (payload.eventType === 'DELETE') {
+            addLog('WARN', `🗑️ Trade removida`);
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          addLog('INFO', '📡 Conectado ao Realtime - Dashboard atualiza automaticamente');
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, loadTrades, addLog]);
 
   return {
     ...state,
