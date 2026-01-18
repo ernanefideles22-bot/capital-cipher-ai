@@ -3,9 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface BybitResponse {
   retCode: number;
-  retMsg: string;
-  result: any;
-  time: number;
+  retMsg?: string;
+  result?: any;
+  time?: number;
+  error?: string;
 }
 
 interface WalletBalance {
@@ -59,31 +60,38 @@ export function useBybitAPI() {
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState<boolean | null>(null);
 
-  const callBybitAPI = useCallback(async (action: string, params: Record<string, any> = {}): Promise<BybitResponse | null> => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const { data, error: fnError } = await supabase.functions.invoke('bybit-api', {
-        body: { action, params },
-      });
-      
-      if (fnError) {
-        throw new Error(fnError.message);
+  const callBybitAPI = useCallback(
+    async (action: string, params: Record<string, any> = {}): Promise<BybitResponse | null> => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const { data, error: fnError } = await supabase.functions.invoke('bybit-api', {
+          body: { action, params },
+        });
+
+        if (fnError) {
+          throw new Error(fnError.message);
+        }
+
+        // Return payload even on Bybit retCode errors so callers can show exact retMsg/retCode.
+        if (data?.retCode !== 0) {
+          const msg = data?.retMsg || data?.error || 'Bybit API error';
+          setError(msg);
+          return data as BybitResponse;
+        }
+
+        return data as BybitResponse;
+      } catch (err: any) {
+        const msg = err?.message || 'Erro desconhecido';
+        setError(msg);
+        return null;
+      } finally {
+        setLoading(false);
       }
-      
-      if (data.retCode !== 0) {
-        throw new Error(data.retMsg || 'Bybit API error');
-      }
-      
-      return data;
-    } catch (err: any) {
-      setError(err.message);
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   const testConnection = useCallback(async (): Promise<boolean> => {
     const result = await callBybitAPI('testConnection');
@@ -94,7 +102,7 @@ export function useBybitAPI() {
 
   const getWalletBalance = useCallback(async (): Promise<WalletBalance | null> => {
     const result = await callBybitAPI('getWalletBalance', { accountType: 'UNIFIED' });
-    
+
     if (result?.result?.list?.[0]) {
       const account = result.result.list[0];
       return {
@@ -107,10 +115,13 @@ export function useBybitAPI() {
     return null;
   }, [callBybitAPI]);
 
-  const getTicker = useCallback(async (symbol: string) => {
-    const result = await callBybitAPI('getTickers', { category: 'linear', symbol });
-    return result?.result?.list?.[0] || null;
-  }, [callBybitAPI]);
+  const getTicker = useCallback(
+    async (symbol: string) => {
+      const result = await callBybitAPI('getTickers', { category: 'linear', symbol });
+      return result?.result?.list?.[0] || null;
+    },
+    [callBybitAPI]
+  );
 
   const getPositions = useCallback(async (): Promise<Position[]> => {
     const result = await callBybitAPI('getPositions');
@@ -132,37 +143,49 @@ export function useBybitAPI() {
     return result?.result?.list || [];
   }, [callBybitAPI]);
 
-  const placeOrder = useCallback(async (
-    symbol: string,
-    side: 'Buy' | 'Sell',
-    qty: number,
-    options?: {
-      orderType?: 'Market' | 'Limit';
-      price?: number;
-      takeProfit?: number;
-      stopLoss?: number;
-    }
-  ) => {
-    return callBybitAPI('placeOrder', {
-      symbol,
-      side,
-      qty,
-      ...options,
-    });
-  }, [callBybitAPI]);
+  const placeOrder = useCallback(
+    async (
+      symbol: string,
+      side: 'Buy' | 'Sell',
+      qty: number,
+      options?: {
+        orderType?: 'Market' | 'Limit';
+        price?: number;
+        takeProfit?: number;
+        stopLoss?: number;
+      }
+    ) => {
+      return callBybitAPI('placeOrder', {
+        symbol,
+        side,
+        qty,
+        ...options,
+      });
+    },
+    [callBybitAPI]
+  );
 
-  const cancelOrder = useCallback(async (symbol: string, orderId: string) => {
-    return callBybitAPI('cancelOrder', { symbol, orderId });
-  }, [callBybitAPI]);
+  const cancelOrder = useCallback(
+    async (symbol: string, orderId: string) => {
+      return callBybitAPI('cancelOrder', { symbol, orderId });
+    },
+    [callBybitAPI]
+  );
 
-  const setLeverage = useCallback(async (symbol: string, leverage: number) => {
-    return callBybitAPI('setLeverage', { symbol, leverage });
-  }, [callBybitAPI]);
+  const setLeverage = useCallback(
+    async (symbol: string, leverage: number) => {
+      return callBybitAPI('setLeverage', { symbol, leverage });
+    },
+    [callBybitAPI]
+  );
 
-  const getKlines = useCallback(async (symbol: string, interval: string = '15', limit: number = 200) => {
-    const result = await callBybitAPI('getKline', { symbol, interval, limit });
-    return result?.result?.list || [];
-  }, [callBybitAPI]);
+  const getKlines = useCallback(
+    async (symbol: string, interval: string = '15', limit: number = 200) => {
+      const result = await callBybitAPI('getKline', { symbol, interval, limit });
+      return result?.result?.list || [];
+    },
+    [callBybitAPI]
+  );
 
   return {
     loading,
