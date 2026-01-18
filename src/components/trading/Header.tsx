@@ -100,23 +100,54 @@ export const Header = ({
       </div>
 
       <div className="hidden lg:flex items-center gap-4 font-mono text-xs">
-        <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">Win</span>
-          <span className="profit-text font-semibold">{stats.winRate.toFixed(0)}%</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">P&L</span>
-          <span className={cn(
-            "font-semibold",
-            stats.totalPnL >= 0 ? "profit-text" : "loss-text"
-          )}>
-            ${stats.totalPnL.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">DD</span>
-          <span className="text-warning font-semibold">{stats.currentDrawdown.toFixed(1)}%</span>
-        </div>
+        {isRealMode ? (
+          // Real mode - show actual wallet data
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">Conta</span>
+              <span className="profit-text font-semibold">
+                ${wallet?.totalEquity.toLocaleString('en-US', { maximumFractionDigits: 0 }) ?? '--'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">P&L</span>
+              <span className={cn(
+                "font-semibold",
+                (wallet?.totalPnL ?? 0) >= 0 ? "profit-text" : "loss-text"
+              )}>
+                {wallet?.totalPnL !== undefined 
+                  ? `$${wallet.totalPnL.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                  : '--'
+                }
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">Trades</span>
+              <span className="text-foreground font-semibold">{stats.totalTrades}</span>
+            </div>
+          </>
+        ) : (
+          // Demo mode - show simulated stats
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">Win</span>
+              <span className="profit-text font-semibold">{stats.winRate.toFixed(0)}%</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">P&L</span>
+              <span className={cn(
+                "font-semibold",
+                stats.totalPnL >= 0 ? "profit-text" : "loss-text"
+              )}>
+                ${stats.totalPnL.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground">DD</span>
+              <span className="text-warning font-semibold">{stats.currentDrawdown.toFixed(1)}%</span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex items-center gap-1 md:gap-1.5">
