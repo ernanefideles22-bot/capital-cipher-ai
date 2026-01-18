@@ -21,6 +21,7 @@ import { BotOpportunitiesPanel } from '@/components/trading/BotOpportunitiesPane
 import { ActiveTradesWidget } from '@/components/trading/ActiveTradesWidget';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useRealtimePrices } from '@/hooks/useRealtimePrices';
+import { useTechnicalIndicators } from '@/hooks/useTechnicalIndicators';
 import { useRealTradingData } from '@/hooks/useRealTradingData';
 import { useVoiceAlerts, playVoiceToggleSound } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
@@ -91,6 +92,12 @@ const Index = () => {
   const { prices: realtimePrices, sparklines, priceAnimations, loading: pricesLoading } = useRealtimePrices({ 
     enabled: true, 
     intervalMs: 2000 
+  });
+
+  // Technical indicators (updates every 5 seconds)
+  const { indicators: technicalIndicators, loading: indicatorsLoading } = useTechnicalIndicators({
+    enabled: true,
+    intervalMs: 5000
   });
 
   // Market data - use real-time prices when available, fallback to demo data
@@ -396,6 +403,7 @@ const Index = () => {
               onClick={() => setSelectedSymbol(data.symbol)}
               priceAnimation={priceAnimations[data.symbol]}
               sparklineData={sparklines[data.symbol]}
+              indicators={technicalIndicators[data.symbol]}
             />
           ))}
         </section>

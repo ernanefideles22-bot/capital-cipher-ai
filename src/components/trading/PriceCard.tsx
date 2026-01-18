@@ -1,7 +1,10 @@
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import type { MarketData } from '@/types/trading';
+import type { TechnicalIndicators } from '@/hooks/useTechnicalIndicators';
+import { TechnicalIndicatorsDisplay } from './TechnicalIndicatorsDisplay';
 import { cn } from '@/lib/utils';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 
 interface PriceCardProps {
   data: MarketData;
@@ -9,6 +12,7 @@ interface PriceCardProps {
   onClick?: () => void;
   priceAnimation?: 'up' | 'down' | null;
   sparklineData?: number[];
+  indicators?: TechnicalIndicators;
 }
 
 // Simple SVG Sparkline component
@@ -97,8 +101,9 @@ const Sparkline = ({ data, isPositive }: { data: number[]; isPositive: boolean }
   );
 };
 
-export const PriceCard = ({ data, isSelected, onClick, priceAnimation, sparklineData }: PriceCardProps) => {
+export const PriceCard = ({ data, isSelected, onClick, priceAnimation, sparklineData, indicators }: PriceCardProps) => {
   const isPositive = data.changePercentage24h >= 0;
+  const [showIndicators, setShowIndicators] = useState(false);
   
   // Determine sparkline trend (compare first and last)
   const sparklineTrend = useMemo(() => {
@@ -119,12 +124,33 @@ export const PriceCard = ({ data, isSelected, onClick, priceAnimation, sparkline
       onClick={onClick}
     >
       <div className="flex items-center justify-between mb-2">
-        <span className={cn(
-          "text-sm font-medium",
-          isSelected ? "text-primary" : "text-muted-foreground"
-        )}>
-          {data.symbol}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={cn(
+            "text-sm font-medium",
+            isSelected ? "text-primary" : "text-muted-foreground"
+          )}>
+            {data.symbol}
+          </span>
+          {/* Overall Signal Badge */}
+          {indicators && (
+            <Badge 
+              variant="outline" 
+              className={cn(
+                "text-[8px] px-1 py-0",
+                indicators.overallSignal === 'STRONG_BUY' || indicators.overallSignal === 'BUY' 
+                  ? "border-profit text-profit" 
+                  : indicators.overallSignal === 'STRONG_SELL' || indicators.overallSignal === 'SELL'
+                  ? "border-loss text-loss"
+                  : "border-muted-foreground text-muted-foreground"
+              )}
+            >
+              {indicators.overallSignal === 'STRONG_BUY' ? '🔥 BUY' :
+               indicators.overallSignal === 'BUY' ? '📈 BUY' :
+               indicators.overallSignal === 'STRONG_SELL' ? '🔥 SELL' :
+               indicators.overallSignal === 'SELL' ? '📉 SELL' : '—'}
+            </Badge>
+          )}
+        </div>
         <div className={cn(
           "flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded transition-all",
           isPositive ? "bg-profit/10 text-profit" : "bg-loss/10 text-loss"
@@ -149,17 +175,94 @@ export const PriceCard = ({ data, isSelected, onClick, priceAnimation, sparkline
       <div className="mb-2 -mx-1">
         <Sparkline data={sparklineData || []} isPositive={sparklineTrend} />
       </div>
+
+      {/* Compact Indicators Row */}
+      {indicators && (
+        <div className="grid grid-cols-4 gap-1 mb-2">
+          <div className="text-center p-1 rounded bg-muted/30">
+            <p className="text-[8px] text-muted-foreground">RSI</p>
+            <p className={cn(
+              "text-[10px] font-bold",
+              indicators.rsi < 30 ? "text-profit" : indicators.rsi > 70 ? "text-loss" : "text-foreground"
+            )}>
+              {indicators.rsi.toFixed(0)}
+            </p>
+          </div>
+          <div className="text-center p-1 rounded bg-muted/30">
+            <p className="text-[8px] text-muted-foreground">MACD</p>
+            <p className={cn(
+              "text-[10px] font-bold",
+              indicators.macdTrend === 'BULLISH' ? "text-profit" : 
+              indicators.macdTrend === 'BEARISH' ? "text-loss" : "text-foreground"
+            )}>
+              {indicators.macdTrend === 'BULLISH' ? '📈' : indicators.macdTrend === 'BEARISH' ? '📉' : '➡️'}
+            </p>
+          </div>
+          <div className="text-center p-1 rounded bg-muted/30">
+            <p className="text-[8px] text-muted-foreground">EMA</p>
+            <p className={cn(
+              "text-[10px] font-bold",
+              indicators.emaTrend.includes('BULLISH') ? "text-profit" : 
+              indicators.emaTrend.includes('BEARISH') ? "text-loss" : "text-foreground"
+            )}>
+              {indicators.emaTrend.includes('STRONG') ? '🔥' : 
+               indicators.emaTrend.includes('BULLISH') ? '🐂' : 
+               indicators.emaTrend.includes('BEARISH') ? '🐻' : '—'}
+            </p>
+          </div>
+          <div className="text-center p-1 rounded bg-muted/30">
+            <p className="text-[8px] text-muted-foreground">Vol</p>
+            <p className={cn(
+              "text-[10px] font-bold",
+              indicators.volumeSignal === 'HIGH' ? "text-warning" : "text-foreground"
+            )}>
+              {indicators.volumeRatio.toFixed(1)}x
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Expandable Full Indicators */}
+      {indicators && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowIndicators(!showIndicators);
+          }}
+          className="w-full flex items-center justify-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors py-1"
+        >
+          {showIndicators ? (
+            <>
+              <ChevronUp className="w-3 h-3" />
+              Ocultar indicadores
+            </>
+          ) : (
+            <>
+              <ChevronDown className="w-3 h-3" />
+              Ver todos indicadores
+            </>
+          )}
+        </button>
+      )}
+
+      {showIndicators && indicators && (
+        <div className="mt-2 -mx-1 animate-in slide-in-from-top-2 duration-200">
+          <TechnicalIndicatorsDisplay indicators={indicators} />
+        </div>
+      )}
       
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div>
-          <span className="text-muted-foreground block">24h High</span>
-          <span className="font-mono text-profit">${data.high24h.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+      {!showIndicators && (
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <span className="text-muted-foreground block">24h High</span>
+            <span className="font-mono text-profit">${data.high24h.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground block">24h Low</span>
+            <span className="font-mono text-loss">${data.low24h.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+          </div>
         </div>
-        <div>
-          <span className="text-muted-foreground block">24h Low</span>
-          <span className="font-mono text-loss">${data.low24h.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
