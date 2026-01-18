@@ -231,6 +231,8 @@ function buildUserPrompt(data: MarketData, analysisType: string): string {
   const low24h = (typeof data.low24h === 'number' ? data.low24h : data.price);
   prompt += `**24h High:** $${high24h.toLocaleString()}\n`;
   prompt += `**24h Low:** $${low24h.toLocaleString()}\n`;
+
+  if (data.rsi !== undefined) {
     prompt += `**RSI (14):** ${data.rsi.toFixed(2)}\n`;
   }
 
