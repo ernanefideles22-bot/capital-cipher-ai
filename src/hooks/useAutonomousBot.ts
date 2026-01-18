@@ -37,6 +37,10 @@ interface TradingRules {
   minScore: number;
   riskPerTradePercent: number;
   cooldownBetweenTradesMs: number;
+  // Capital allocation settings
+  maxCapitalPercentPerTrade: number; // Max % of capital for a single trade
+  capitalAllocationMode: 'equal' | 'weighted' | 'tiered'; // How to distribute capital
+  reserveCapitalPercent: number; // % of capital to keep as reserve
 }
 
 interface UseAutonomousBotOptions {
@@ -58,11 +62,15 @@ interface UseAutonomousBotOptions {
 const DEFAULT_RULES: TradingRules = {
   maxDrawdownPercent: 10,
   maxDailyLossPercent: 5,
-  maxConcurrentTrades: 3,
+  maxConcurrentTrades: 5,
   minConfidence: 70,
   minScore: 65,
   riskPerTradePercent: 2,
-  cooldownBetweenTradesMs: 30000, // 30 seconds between trades
+  cooldownBetweenTradesMs: 10000, // 10 seconds between trades
+  // Capital allocation
+  maxCapitalPercentPerTrade: 25, // Max 25% per trade
+  capitalAllocationMode: 'weighted', // Distribute based on confidence
+  reserveCapitalPercent: 20, // Keep 20% as reserve
 };
 
 export const useAutonomousBot = ({
@@ -89,6 +97,7 @@ export const useAutonomousBot = ({
   const [error, setError] = useState<string | null>(null);
   const [lastTradeTime, setLastTradeTime] = useState<number>(0);
   const [tradesToday, setTradesToday] = useState<number>(0);
+  const [allocatedCapital, setAllocatedCapital] = useState<number>(0); // Track capital in use
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isRunningRef = useRef(false);
@@ -133,6 +142,80 @@ export const useAutonomousBot = ({
     };
     onLog?.(log);
   }, [onLog]);
+
+  // Calculate available capital for new trades
+  const getAvailableCapital = useCallback((): number => {
+    const totalCapital = accountBalance;
+    const reserveAmount = (totalCapital * rules.reserveCapitalPercent) / 100;
+    const availableForTrading = totalCapital - reserveAmount - allocatedCapital;
+    return Math.max(0, availableForTrading);
+  }, [accountBalance, rules.reserveCapitalPercent, allocatedCapital]);
+
+  // Calculate capital allocation for multiple opportunities based on confidence/score
+  const calculateCapitalAllocation = useCallback((
+    opportunities: BotOpportunity[]
+  ): Map<string, number> => {
+    const allocation = new Map<string, number>();
+    if (opportunities.length === 0) return allocation;
+
+    const availableCapital = getAvailableCapital();
+    const maxPerTrade = (accountBalance * rules.maxCapitalPercentPerTrade) / 100;
+
+    addLog('AI', `💰 Capital disponível: $${availableCapital.toFixed(2)} | Max por trade: $${maxPerTrade.toFixed(2)}`);
+
+    if (availableCapital <= 0) {
+      addLog('WARN', '⚠️ Sem capital disponível para novas posições');
+      return allocation;
+    }
+
+    // Sort by confidence * score for priority ranking
+    const rankedOpps = [...opportunities]
+      .filter(o => o.recommendation === 'BUY' || o.recommendation === 'SELL')
+      .sort((a, b) => (b.confidence * b.score) - (a.confidence * a.score));
+
+    if (rules.capitalAllocationMode === 'equal') {
+      // Equal distribution among all opportunities
+      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - openTrades.length);
+      const capitalPerTrade = Math.min(availableCapital / maxTrades, maxPerTrade);
+      
+      for (let i = 0; i < maxTrades; i++) {
+        allocation.set(rankedOpps[i].symbol, capitalPerTrade);
+      }
+    } else if (rules.capitalAllocationMode === 'weighted') {
+      // Weighted distribution based on confidence
+      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - openTrades.length);
+      const topOpps = rankedOpps.slice(0, maxTrades);
+      
+      const totalWeight = topOpps.reduce((sum, o) => sum + (o.confidence * o.score) / 100, 0);
+      
+      for (const opp of topOpps) {
+        const weight = (opp.confidence * opp.score) / 100;
+        const proportion = weight / totalWeight;
+        const capitalForTrade = Math.min(availableCapital * proportion, maxPerTrade);
+        allocation.set(opp.symbol, capitalForTrade);
+      }
+    } else if (rules.capitalAllocationMode === 'tiered') {
+      // Tiered: Top pick gets 40%, 2nd gets 30%, 3rd gets 20%, rest 10% each
+      const tiers = [0.40, 0.30, 0.20, 0.10];
+      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - openTrades.length);
+      
+      let remainingCapital = availableCapital;
+      for (let i = 0; i < maxTrades && remainingCapital > 0; i++) {
+        const tierPercent = tiers[Math.min(i, tiers.length - 1)];
+        const capitalForTrade = Math.min(availableCapital * tierPercent, maxPerTrade, remainingCapital);
+        allocation.set(rankedOpps[i].symbol, capitalForTrade);
+        remainingCapital -= capitalForTrade;
+      }
+    }
+
+    // Log allocation summary
+    allocation.forEach((capital, symbol) => {
+      const opp = rankedOpps.find(o => o.symbol === symbol);
+      addLog('INFO', `📊 ${symbol}: $${capital.toFixed(2)} (${((capital / accountBalance) * 100).toFixed(1)}%) | Conf: ${opp?.confidence}%`);
+    });
+
+    return allocation;
+  }, [getAvailableCapital, accountBalance, rules, openTrades.length, addLog]);
 
   const analyzeAllPairs = useCallback(async (): Promise<MultiPairAnalysisResult | null> => {
     if (Object.keys(marketData).length === 0) {
@@ -207,7 +290,7 @@ export const useAutonomousBot = ({
     }
   }, [marketData, addLog]);
 
-  const executeOpportunity = useCallback(async (opportunity: BotOpportunity) => {
+  const executeOpportunity = useCallback(async (opportunity: BotOpportunity, allocatedCapitalForTrade?: number) => {
     // Check all trading rules first
     const tradingCheck = canTrade();
     if (!tradingCheck.allowed) {
@@ -243,21 +326,31 @@ export const useAutonomousBot = ({
     const bybitSide: 'Buy' | 'Sell' = opportunity.recommendation === 'BUY' ? 'Buy' : 'Sell';
     const isLong = bybitSide === 'Buy';
 
-    // Calculate position size based on risk management
-    const riskAmount = (accountBalance * rules.riskPerTradePercent) / 100;
-    const stopDistance = Math.abs(opportunity.entryPrice - opportunity.stopLoss);
-    const calculatedQty = stopDistance > 0 ? riskAmount / stopDistance : 0;
+    // Calculate position size based on allocated capital OR risk management
+    let capitalToUse: number;
+    if (allocatedCapitalForTrade && allocatedCapitalForTrade > 0) {
+      // Use fractioned capital allocation
+      capitalToUse = allocatedCapitalForTrade;
+      addLog('AI', `💰 ${opportunity.symbol}: Usando capital fracionado de $${capitalToUse.toFixed(2)}`);
+    } else {
+      // Fallback to risk-based calculation
+      capitalToUse = (accountBalance * rules.riskPerTradePercent) / 100;
+    }
 
-    // Bybit typically enforces a minimum notional (ex: 5 USDT). If we can't meet it within risk,
-    // we skip the trade (instead of forcing a bigger size that violates risk rules).
+    const stopDistance = Math.abs(opportunity.entryPrice - opportunity.stopLoss);
+    
+    // Calculate quantity based on capital and price
+    let quantity = opportunity.entryPrice > 0 ? capitalToUse / opportunity.entryPrice : 0;
+
+    // Bybit typically enforces a minimum notional (ex: 5 USDT)
     const minNotionalUSDT = 5;
     const minQtyForNotional = opportunity.entryPrice > 0 ? minNotionalUSDT / opportunity.entryPrice : 0;
 
-    let quantity = Number.isFinite(calculatedQty) && calculatedQty > 0 ? calculatedQty : 0;
     if (quantity < minQtyForNotional) {
-      const riskAtMinQty = minQtyForNotional * stopDistance;
-      if (riskAtMinQty > riskAmount) {
-        addLog('WARN', `⚠️ ${opportunity.symbol}: Ordem bloqueada (mínimo ${minNotionalUSDT}USDT exige qty=${minQtyForNotional.toFixed(6)}, risco seria $${riskAtMinQty.toFixed(2)} > $${riskAmount.toFixed(2)})`);
+      const valueAtMinQty = minQtyForNotional * opportunity.entryPrice;
+      if (valueAtMinQty > capitalToUse * 1.5) {
+        // Allow some flexibility but not too much
+        addLog('WARN', `⚠️ ${opportunity.symbol}: Capital insuficiente ($${capitalToUse.toFixed(2)}) para mínimo de ${minNotionalUSDT} USDT`);
         return null;
       }
       quantity = minQtyForNotional;
@@ -331,6 +424,10 @@ export const useAutonomousBot = ({
       aiReasoning: opportunity.reasoning,
     };
 
+    // Track allocated capital
+    const tradeValue = quantity * opportunity.entryPrice;
+    setAllocatedCapital(prev => prev + tradeValue);
+    
     setOpenTrades(prev => [...prev, trade]);
     setLastTradeTime(Date.now());
     setTradesToday(prev => prev + 1);
@@ -374,18 +471,25 @@ export const useAutonomousBot = ({
     const analysis = await analyzeAllPairs();
     
     if (analysis?.bestOpportunities?.length > 0) {
-      // Execute ALL opportunities that meet criteria (sorted by score, highest first)
+      // Filter valid opportunities
       const validOpportunities = analysis.bestOpportunities
         .filter(o => 
           o.confidence >= rules.minConfidence && 
           o.score >= rules.minScore &&
           (o.recommendation === 'BUY' || o.recommendation === 'SELL')
         )
-        .sort((a, b) => b.score - a.score);
+        .sort((a, b) => (b.confidence * b.score) - (a.confidence * a.score)); // Sort by combined metric
 
       addLog('AI', `📈 ${validOpportunities.length} oportunidades válidas (conf >= ${rules.minConfidence}%)`);
 
-      // Try to execute each opportunity (respecting limits)
+      if (validOpportunities.length === 0) return;
+
+      // Calculate intelligent capital allocation across opportunities
+      addLog('AI', `🎯 Fracionando capital entre ${validOpportunities.length} melhores entradas...`);
+      const capitalAllocation = calculateCapitalAllocation(validOpportunities);
+
+      // Execute trades with allocated capital
+      let tradesExecuted = 0;
       for (const opp of validOpportunities) {
         const stillCanTrade = canTrade();
         if (!stillCanTrade.allowed) {
@@ -393,13 +497,26 @@ export const useAutonomousBot = ({
           break;
         }
 
-        await executeOpportunity(opp);
+        const allocatedAmount = capitalAllocation.get(opp.symbol);
+        if (!allocatedAmount || allocatedAmount <= 0) {
+          addLog('INFO', `${opp.symbol}: Sem capital alocado, pulando`);
+          continue;
+        }
+
+        const trade = await executeOpportunity(opp, allocatedAmount);
+        if (trade) {
+          tradesExecuted++;
+        }
         
         // Small delay between executions to avoid overwhelming
         await new Promise(resolve => setTimeout(resolve, 500));
       }
+
+      if (tradesExecuted > 0) {
+        addLog('SUCCESS', `✅ ${tradesExecuted} trades executados com capital fracionado`);
+      }
     }
-  }, [analyzeAllPairs, executeOpportunity, canTrade, rules, addLog]);
+  }, [analyzeAllPairs, executeOpportunity, canTrade, rules, addLog, calculateCapitalAllocation]);
 
   const start = useCallback(() => {
     if (isRunning) return;
@@ -411,6 +528,7 @@ export const useAutonomousBot = ({
     
     addLog('SUCCESS', '🤖 Bot autônomo ATIVADO');
     addLog('INFO', `📋 Regras: Conf >= ${rules.minConfidence}% | Max ${rules.maxConcurrentTrades} trades | Drawdown max ${rules.maxDrawdownPercent}%`);
+    addLog('INFO', `💰 Alocação: ${rules.capitalAllocationMode} | Max ${rules.maxCapitalPercentPerTrade}% por trade | Reserva ${rules.reserveCapitalPercent}%`);
     toast.success('Bot autônomo ativado - executando trades automaticamente');
 
     // Run immediately
@@ -467,10 +585,13 @@ export const useAutonomousBot = ({
     opportunities,
     openTrades,
     error,
+    allocatedCapital,
+    availableCapital: getAvailableCapital(),
     start,
     stop,
     toggle,
     analyzeNow,
     executeOpportunity,
+    calculateCapitalAllocation,
   };
 };
