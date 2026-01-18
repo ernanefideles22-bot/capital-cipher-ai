@@ -23,7 +23,8 @@ const strategyColors: Record<Trade['strategy'], string> = {
 };
 
 export const TradesTable = ({ trades, isRealMode = false }: TradesTableProps) => {
-  const recentTrades = trades.slice(0, 10);
+  // In real mode, show empty trades (will populate when real trading starts)
+  const recentTrades = isRealMode ? [] : trades.slice(0, 10);
   
   return (
     <div className="glass-card overflow-hidden">
@@ -62,62 +63,72 @@ export const TradesTable = ({ trades, isRealMode = false }: TradesTableProps) =>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {recentTrades.map((trade) => (
-              <TableRow key={trade.id} className="border-border hover:bg-muted/30">
-                <TableCell className="font-mono font-medium">{trade.symbol}</TableCell>
-                <TableCell>
-                  <div className={cn(
-                    "flex items-center gap-1 text-xs font-medium",
-                    trade.side === 'LONG' ? "text-profit" : "text-loss"
-                  )}>
-                    {trade.side === 'LONG' ? (
-                      <ArrowUpRight className="w-3 h-3" />
-                    ) : (
-                      <ArrowDownRight className="w-3 h-3" />
-                    )}
-                    {trade.side}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={cn("text-xs", strategyColors[trade.strategy])}>
-                    {trade.strategy}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right font-mono text-sm">
-                  ${trade.entryPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
-                </TableCell>
-                <TableCell className="text-right font-mono text-sm">
-                  {trade.exitPrice 
-                    ? `$${trade.exitPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}` 
-                    : '—'}
-                </TableCell>
-                <TableCell className="text-right">
-                  {trade.pnl !== undefined ? (
-                    <div className={cn(
-                      "font-mono text-sm font-medium",
-                      trade.pnl >= 0 ? "profit-text" : "loss-text"
-                    )}>
-                      {trade.pnl >= 0 ? '+' : ''}${trade.pnl.toFixed(2)}
-                      <span className="text-xs ml-1 opacity-70">
-                        ({trade.pnlPercentage?.toFixed(2)}%)
-                      </span>
-                    </div>
-                  ) : '—'}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={cn(
-                    "text-xs",
-                    trade.status === 'OPEN' 
-                      ? "bg-accent/20 text-accent border-accent/30"
-                      : trade.status === 'CLOSED'
-                      ? "bg-muted text-muted-foreground border-muted"
-                      : "bg-loss/20 text-loss border-loss/30"
-                  )}>
-                    {trade.status}
-                  </Badge>
+            {recentTrades.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  {isRealMode 
+                    ? 'Nenhum trade real executado ainda. Os dados aparecerão quando começar a operar.'
+                    : 'Nenhum trade simulado ainda.'}
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              recentTrades.map((trade) => (
+                <TableRow key={trade.id} className="border-border hover:bg-muted/30">
+                  <TableCell className="font-mono font-medium">{trade.symbol}</TableCell>
+                  <TableCell>
+                    <div className={cn(
+                      "flex items-center gap-1 text-xs font-medium",
+                      trade.side === 'LONG' ? "text-profit" : "text-loss"
+                    )}>
+                      {trade.side === 'LONG' ? (
+                        <ArrowUpRight className="w-3 h-3" />
+                      ) : (
+                        <ArrowDownRight className="w-3 h-3" />
+                      )}
+                      {trade.side}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={cn("text-xs", strategyColors[trade.strategy])}>
+                      {trade.strategy}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-sm">
+                    ${trade.entryPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-sm">
+                    {trade.exitPrice 
+                      ? `$${trade.exitPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}` 
+                      : '—'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {trade.pnl !== undefined ? (
+                      <div className={cn(
+                        "font-mono text-sm font-medium",
+                        trade.pnl >= 0 ? "profit-text" : "loss-text"
+                      )}>
+                        {trade.pnl >= 0 ? '+' : ''}${trade.pnl.toFixed(2)}
+                        <span className="text-xs ml-1 opacity-70">
+                          ({trade.pnlPercentage?.toFixed(2)}%)
+                        </span>
+                      </div>
+                    ) : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={cn(
+                      "text-xs",
+                      trade.status === 'OPEN' 
+                        ? "bg-accent/20 text-accent border-accent/30"
+                        : trade.status === 'CLOSED'
+                        ? "bg-muted text-muted-foreground border-muted"
+                        : "bg-loss/20 text-loss border-loss/30"
+                    )}>
+                      {trade.status}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
