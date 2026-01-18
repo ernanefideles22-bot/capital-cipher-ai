@@ -15,6 +15,7 @@ import { TradingAIPanel } from '@/components/trading/TradingAIPanel';
 import { LiveNewsPanel } from '@/components/trading/LiveNewsPanel';
 import { AIMarketAnalysis } from '@/components/trading/AIMarketAnalysis';
 import { BybitPositionsPanel } from '@/components/trading/BybitPositionsPanel';
+import { BotOpportunitiesPanel } from '@/components/trading/BotOpportunitiesPanel';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useRealTradingData } from '@/hooks/useRealTradingData';
 import { useVoiceAlerts, playVoiceToggleSound } from '@/hooks/useVoiceAlerts';
@@ -383,6 +384,20 @@ const Index = () => {
         {!isRealMode && (
           <section>
             <AIMemoryPanel isRealMode={isRealMode} />
+          </section>
+        )}
+
+        {/* Bot Opportunities Panel - Only in Real Mode */}
+        {isRealMode && (
+          <section>
+            <BotOpportunitiesPanel
+              opportunities={autonomousBot.opportunities}
+              lastAnalysis={autonomousBot.lastAnalysis}
+              isAnalyzing={autonomousBot.isAnalyzing}
+              isRunning={autonomousBot.isRunning}
+              onAnalyzeNow={autonomousBot.analyzeNow}
+              onExecuteOpportunity={autonomousBot.executeOpportunity}
+            />
           </section>
         )}
 
