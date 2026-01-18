@@ -19,6 +19,7 @@ import { BybitOrdersPanel } from '@/components/trading/BybitOrdersPanel';
 import { BotOpportunitiesPanel } from '@/components/trading/BotOpportunitiesPanel';
 import { ActiveTradesWidget } from '@/components/trading/ActiveTradesWidget';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
+import { useRealtimePrices } from '@/hooks/useRealtimePrices';
 import { useRealTradingData } from '@/hooks/useRealTradingData';
 import { useVoiceAlerts, playVoiceToggleSound } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
@@ -84,12 +85,21 @@ const Index = () => {
     return demoStats;
   }, [isRealMode, realData.stats, demoStats, wallet]);
 
-  // Market data - use demo data for now (could integrate Bybit API later)
+  // Real-time prices from Bybit API (updates every 2 seconds)
+  const { prices: realtimePrices, priceAnimations, loading: pricesLoading } = useRealtimePrices({ 
+    enabled: true, 
+    intervalMs: 2000 
+  });
+
+  // Market data - use real-time prices when available, fallback to demo data
   const marketData = useMemo(() => {
-    // Always use market data from the simulation for now
-    // Real mode could fetch from Bybit API if needed
-    return demoMarketData;
-  }, [demoMarketData]);
+    // Merge real-time prices with demo data
+    const merged = { ...demoMarketData };
+    Object.keys(realtimePrices).forEach(symbol => {
+      merged[symbol] = realtimePrices[symbol];
+    });
+    return merged;
+  }, [demoMarketData, realtimePrices]);
 
   // Autonomous bot hook - handles multi-pair analysis
   const handleBotLog = useCallback((log: LogEntry) => {
@@ -382,6 +392,7 @@ const Index = () => {
               data={data} 
               isSelected={data.symbol === selectedSymbol}
               onClick={() => setSelectedSymbol(data.symbol)}
+              priceAnimation={priceAnimations[data.symbol]}
             />
           ))}
         </section>
