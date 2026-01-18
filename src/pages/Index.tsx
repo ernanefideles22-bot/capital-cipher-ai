@@ -109,10 +109,17 @@ const Index = () => {
     }
   }, [isRealMode, realData]);
 
+  // Track last executed trade symbol for auto-chart expansion
+  const [lastExecutedSymbol, setLastExecutedSymbol] = useState<string | null>(null);
+
   const handleBotTradeOpened = useCallback((trade: Trade) => {
     if (isRealMode && user) {
       realData.addTrade(trade, trade.aiConfidence, trade.aiReasoning);
     }
+    // Auto-expand chart for the executed trade
+    setLastExecutedSymbol(trade.symbol);
+    // Clear after 10 seconds to allow re-triggering
+    setTimeout(() => setLastExecutedSymbol(null), 10000);
   }, [isRealMode, user, realData]);
 
   const autonomousBot = useAutonomousBot({
@@ -410,6 +417,7 @@ const Index = () => {
               marketPrices={Object.fromEntries(
                 Object.values(marketData).map(d => [d.symbol, d.price])
               )}
+              lastExecutedSymbol={lastExecutedSymbol}
             />
           </section>
         )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,11 +23,33 @@ interface BybitPositionsPanelProps {
   positions: Position[];
   loading?: boolean;
   onRefresh?: () => void;
+  autoExpandNewPositions?: boolean;
 }
 
-export const BybitPositionsPanel = ({ positions, loading, onRefresh }: BybitPositionsPanelProps) => {
+export const BybitPositionsPanel = ({ 
+  positions, 
+  loading, 
+  onRefresh,
+  autoExpandNewPositions = true 
+}: BybitPositionsPanelProps) => {
   const [expandedPosition, setExpandedPosition] = useState<string | null>(null);
+  const prevPositionsRef = useRef<Position[]>([]);
   const totalPnL = positions.reduce((sum, pos) => sum + parseFloat(pos.unrealisedPnl || '0'), 0);
+
+  // Auto-expand new positions
+  useEffect(() => {
+    if (!autoExpandNewPositions) return;
+    
+    const prevSymbols = new Set(prevPositionsRef.current.map(p => p.symbol));
+    const newPosition = positions.find(p => !prevSymbols.has(p.symbol));
+    
+    if (newPosition) {
+      const newPosKey = `${newPosition.symbol}-${positions.findIndex(p => p.symbol === newPosition.symbol)}`;
+      setExpandedPosition(newPosKey);
+    }
+    
+    prevPositionsRef.current = positions;
+  }, [positions, autoExpandNewPositions]);
   
   return (
     <Card className="glass-card h-full">
