@@ -48,8 +48,29 @@ export const AIMarketAnalysis = ({ marketData }: AIMarketAnalysisProps) => {
     setIsLoading(true);
     setError(null);
 
+    const formatInvokeError = (err: unknown) => {
+      if (!err) return 'Erro ao analisar mercado';
+      if (err instanceof Error) {
+        const anyErr = err as any;
+        const status = anyErr?.context?.status ?? anyErr?.status;
+        const body = anyErr?.context?.body;
+
+        if (body && typeof body === 'string') {
+          try {
+            const parsed = JSON.parse(body);
+            if (parsed?.error) return String(parsed.error);
+          } catch {
+            // ignore
+          }
+        }
+
+        if (typeof status === 'number') return `Erro ${status}: ${err.message}`;
+        return err.message;
+      }
+      return 'Erro ao analisar mercado';
+    };
+
     try {
-      // Get current session (can exist even if the access token is stale)
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -58,18 +79,26 @@ export const AIMarketAnalysis = ({ marketData }: AIMarketAnalysisProps) => {
         throw new Error('Você precisa estar logado para usar a análise de IA');
       }
 
+      const price = Number(marketData.price);
+      if (!Number.isFinite(price) || price <= 0) {
+        throw new Error('Dados de preço inválidos para análise. Aguarde o carregamento do mercado.');
+      }
+
+      const payload = {
+        symbol: marketData.symbol,
+        price,
+        change24h: Number(marketData.change24h) || 0,
+        volume24h: Number.isFinite(Number(marketData.volume24h)) ? Number(marketData.volume24h) : 0,
+        high24h:
+          typeof marketData.high24h === 'number' && marketData.high24h > 0 ? marketData.high24h : price,
+        low24h: typeof marketData.low24h === 'number' && marketData.low24h > 0 ? marketData.low24h : price,
+      };
+
       const invoke = (accessToken: string) =>
         supabase.functions.invoke('market-analysis', {
           headers: { Authorization: `Bearer ${accessToken}` },
           body: {
-            marketData: {
-              symbol: marketData.symbol,
-              price: marketData.price,
-              change24h: marketData.change24h,
-              volume24h: marketData.volume24h,
-              high24h: marketData.high24h,
-              low24h: marketData.low24h,
-            },
+            marketData: payload,
             analysisType: 'full',
           },
         });
@@ -97,9 +126,11 @@ export const AIMarketAnalysis = ({ marketData }: AIMarketAnalysisProps) => {
         toast.success('Análise de mercado concluída!');
       } else if (data?.error) {
         throw new Error(data.error);
+      } else {
+        throw new Error('Resposta inválida do serviço de análise');
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao analisar mercado';
+      const message = formatInvokeError(err);
       setError(message);
       toast.error(message);
     } finally {
