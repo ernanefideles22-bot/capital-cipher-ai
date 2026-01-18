@@ -53,6 +53,105 @@ export type Database = {
         }
         Relationships: []
       }
+      neural_network_state: {
+        Row: {
+          accuracy: number | null
+          created_at: string
+          factor_weights: Json | null
+          id: string
+          last_trained_at: string | null
+          loss_value: number | null
+          network_version: number | null
+          pattern_weights: Json | null
+          sharpe_ratio: number | null
+          strategy_weights: Json | null
+          symbol_performance: Json | null
+          total_epochs: number | null
+          updated_at: string
+          user_id: string
+          win_rate: number | null
+        }
+        Insert: {
+          accuracy?: number | null
+          created_at?: string
+          factor_weights?: Json | null
+          id?: string
+          last_trained_at?: string | null
+          loss_value?: number | null
+          network_version?: number | null
+          pattern_weights?: Json | null
+          sharpe_ratio?: number | null
+          strategy_weights?: Json | null
+          symbol_performance?: Json | null
+          total_epochs?: number | null
+          updated_at?: string
+          user_id: string
+          win_rate?: number | null
+        }
+        Update: {
+          accuracy?: number | null
+          created_at?: string
+          factor_weights?: Json | null
+          id?: string
+          last_trained_at?: string | null
+          loss_value?: number | null
+          network_version?: number | null
+          pattern_weights?: Json | null
+          sharpe_ratio?: number | null
+          strategy_weights?: Json | null
+          symbol_performance?: Json | null
+          total_epochs?: number | null
+          updated_at?: string
+          user_id?: string
+          win_rate?: number | null
+        }
+        Relationships: []
+      }
+      neural_training_epochs: {
+        Row: {
+          accuracy_after: number | null
+          accuracy_before: number | null
+          accuracy_improvement: number | null
+          epoch_number: number
+          id: string
+          learning_rate: number | null
+          loss_after: number | null
+          loss_before: number | null
+          trades_processed: number | null
+          trained_at: string
+          user_id: string
+          weight_updates: Json | null
+        }
+        Insert: {
+          accuracy_after?: number | null
+          accuracy_before?: number | null
+          accuracy_improvement?: number | null
+          epoch_number: number
+          id?: string
+          learning_rate?: number | null
+          loss_after?: number | null
+          loss_before?: number | null
+          trades_processed?: number | null
+          trained_at?: string
+          user_id: string
+          weight_updates?: Json | null
+        }
+        Update: {
+          accuracy_after?: number | null
+          accuracy_before?: number | null
+          accuracy_improvement?: number | null
+          epoch_number?: number
+          id?: string
+          learning_rate?: number | null
+          loss_after?: number | null
+          loss_before?: number | null
+          trades_processed?: number | null
+          trained_at?: string
+          user_id?: string
+          weight_updates?: Json | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -85,6 +184,89 @@ export type Database = {
           voice_alerts_enabled?: boolean | null
         }
         Relationships: []
+      }
+      trade_experiences: {
+        Row: {
+          ai_confidence: number | null
+          btc_correlation: number | null
+          created_at: string
+          ema_trend: string | null
+          entry_price: number
+          exit_price: number | null
+          id: string
+          learned: boolean | null
+          learning_contribution: number | null
+          macd_entry: number | null
+          market_sentiment: string | null
+          outcome: string | null
+          pnl: number | null
+          pnl_percentage: number | null
+          rsi_entry: number | null
+          side: string
+          strategy_used: string | null
+          symbol: string
+          trade_id: string | null
+          user_id: string
+          volatility_entry: number | null
+          volume_ratio: number | null
+        }
+        Insert: {
+          ai_confidence?: number | null
+          btc_correlation?: number | null
+          created_at?: string
+          ema_trend?: string | null
+          entry_price: number
+          exit_price?: number | null
+          id?: string
+          learned?: boolean | null
+          learning_contribution?: number | null
+          macd_entry?: number | null
+          market_sentiment?: string | null
+          outcome?: string | null
+          pnl?: number | null
+          pnl_percentage?: number | null
+          rsi_entry?: number | null
+          side: string
+          strategy_used?: string | null
+          symbol: string
+          trade_id?: string | null
+          user_id: string
+          volatility_entry?: number | null
+          volume_ratio?: number | null
+        }
+        Update: {
+          ai_confidence?: number | null
+          btc_correlation?: number | null
+          created_at?: string
+          ema_trend?: string | null
+          entry_price?: number
+          exit_price?: number | null
+          id?: string
+          learned?: boolean | null
+          learning_contribution?: number | null
+          macd_entry?: number | null
+          market_sentiment?: string | null
+          outcome?: string | null
+          pnl?: number | null
+          pnl_percentage?: number | null
+          rsi_entry?: number | null
+          side?: string
+          strategy_used?: string | null
+          symbol?: string
+          trade_id?: string | null
+          user_id?: string
+          volatility_entry?: number | null
+          volume_ratio?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_experiences_trade_id_fkey"
+            columns: ["trade_id"]
+            isOneToOne: false
+            referencedRelation: "trades"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       trades: {
         Row: {

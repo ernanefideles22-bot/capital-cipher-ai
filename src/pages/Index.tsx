@@ -8,6 +8,7 @@ import { AIDecisionsPanel } from '@/components/trading/AIDecisionsPanel';
 import { LogsPanel } from '@/components/trading/LogsPanel';
 import { TradingViewChart } from '@/components/trading/TradingViewChart';
 import { AILearningPanel } from '@/components/trading/AILearningPanel';
+import { NeuralNetworkPanel } from '@/components/trading/NeuralNetworkPanel';
 import { AIMemoryPanel } from '@/components/trading/AIMemoryPanel';
 import { DrawdownGauge } from '@/components/trading/DrawdownGauge';
 import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
@@ -25,6 +26,7 @@ import { useVoiceAlerts, playVoiceToggleSound } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
 import { useBybitAccount } from '@/hooks/useBybitAccount';
 import { useAutonomousBot } from '@/hooks/useAutonomousBot';
+import { useNeuralNetwork } from '@/hooks/useNeuralNetwork';
 import type { TradeResult } from '@/hooks/useTradingAI';
 import type { Trade, BotStats, AIDecision, LogEntry } from '@/types/trading';
 import { toast } from 'sonner';
@@ -458,8 +460,10 @@ const Index = () => {
 
         {/* Main Content Grid */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          {/* Left Column - AI Learning & Trades */}
+          {/* Left Column - Neural Network & Trades */}
           <div className="lg:col-span-2 flex flex-col gap-3">
+            {/* Neural Network Panel - Real learning AI */}
+            {isRealMode && <NeuralNetworkPanel />}
             {/* AI Learning Panel - Only visible in demo mode */}
             {!isRealMode && <AILearningPanel isRealMode={isRealMode} />}
             <TradesTable trades={trades} isRealMode={isRealMode} />
