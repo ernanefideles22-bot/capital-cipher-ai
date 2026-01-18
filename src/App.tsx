@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 const Index = lazy(() => import("./pages/Index"));
 const Backtesting = lazy(() => import("./pages/Backtesting"));
 const Performance = lazy(() => import("./pages/Performance"));
+const Settings = lazy(() => import("./pages/Settings"));
 const Auth = lazy(() => import("./pages/Auth"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -72,6 +73,7 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/backtesting" element={<ProtectedRoute><Backtesting /></ProtectedRoute>} />
             <Route path="/performance" element={<ProtectedRoute><Performance /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
