@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useBybitAPI } from './useBybitAPI';
 
 interface WalletInfo {
@@ -19,12 +19,11 @@ interface BybitAccountState {
   toggleMode: () => void;
 }
 
-// Singleton state for sharing across components
-let sharedState: BybitAccountState | null = null;
+// Simple singleton listener set to keep mode in sync across hook instances
 let listeners: Set<() => void> = new Set();
 
 const notifyListeners = () => {
-  listeners.forEach(listener => listener());
+  listeners.forEach((listener) => listener());
 };
 
 export function useBybitAccount(): BybitAccountState {
@@ -62,23 +61,18 @@ export function useBybitAccount(): BybitAccountState {
     }
   }, [isRealMode, testConnection, getWalletBalance, getPositions]);
 
+  // Toggle mode without side-effects in the state updater (prevents React queue corruption)
   const toggleMode = useCallback(() => {
-    setIsRealMode(prev => {
-      const newMode = !prev;
-      localStorage.setItem('bybit-mode', newMode ? 'real' : 'demo');
-      notifyListeners();
-      return newMode;
-    });
+    setIsRealMode((prev) => !prev);
   }, []);
 
-  // Initial fetch and auto-refresh
+  // Persist + notify other hook instances after the mode actually changes
   useEffect(() => {
-    if (isRealMode) {
-      refreshData();
-      const interval = setInterval(refreshData, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [isRealMode, refreshData]);
+    localStorage.setItem('bybit-mode', isRealMode ? 'real' : 'demo');
+    notifyListeners();
+  }, [isRealMode]);
+
+  // Initial fetch and auto-refresh
 
   return {
     loading,

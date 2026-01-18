@@ -301,7 +301,7 @@ export const useTradingData = (options: UseTradingDataOptions = {}) => {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [aiDecisions, setAIDecisions] = useState<AIDecision[]>([]);
-  const DEFAULT_CONFIG: BotConfig = {
+  const [config, setConfig] = useState<BotConfig>({
     mode: 'paper',
     marketMode: 'FUTURES',
     leverage: 5,
@@ -309,57 +309,7 @@ export const useTradingData = (options: UseTradingDataOptions = {}) => {
     maxConcurrentTrades: 3,
     riskPerTrade: 2,
     assets: Object.keys(TRADING_PAIRS),
-  };
-
-  const loadSavedConfig = (): BotConfig | null => {
-    try {
-      const raw = localStorage.getItem('bot_config');
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') return null;
-
-      const mode = parsed.mode === 'paper' || parsed.mode === 'live' ? parsed.mode : DEFAULT_CONFIG.mode;
-      const marketMode =
-        parsed.marketMode === 'SPOT' || parsed.marketMode === 'FUTURES'
-          ? parsed.marketMode
-          : DEFAULT_CONFIG.marketMode;
-
-      const leverage = typeof parsed.leverage === 'number' ? parsed.leverage : DEFAULT_CONFIG.leverage;
-      const maxDrawdown = typeof parsed.maxDrawdown === 'number' ? parsed.maxDrawdown : DEFAULT_CONFIG.maxDrawdown;
-      const maxConcurrentTrades =
-        typeof parsed.maxConcurrentTrades === 'number'
-          ? parsed.maxConcurrentTrades
-          : DEFAULT_CONFIG.maxConcurrentTrades;
-      const riskPerTrade = typeof parsed.riskPerTrade === 'number' ? parsed.riskPerTrade : DEFAULT_CONFIG.riskPerTrade;
-
-      const assets =
-        Array.isArray(parsed.assets) && parsed.assets.every((a: unknown) => typeof a === 'string')
-          ? (parsed.assets as string[])
-          : DEFAULT_CONFIG.assets;
-
-      return {
-        mode,
-        marketMode,
-        leverage,
-        maxDrawdown,
-        maxConcurrentTrades,
-        riskPerTrade,
-        assets,
-      };
-    } catch {
-      return null;
-    }
-  };
-
-  const [config, setConfig] = useState<BotConfig>(() => loadSavedConfig() ?? DEFAULT_CONFIG);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('bot_config', JSON.stringify(config));
-    } catch {
-      // ignore
-    }
-  }, [config]);
+  });
 
   const simulationRef = useRef<NodeJS.Timeout | null>(null);
   const prevModeRef = useRef<boolean>(isRealMode);
