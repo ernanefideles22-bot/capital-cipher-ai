@@ -486,18 +486,41 @@ export const useAutonomousBot = ({
         });
       }
 
-      const { data, error: fnError } = await supabase.functions.invoke('multi-pair-analysis', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        body: {
-          marketData: preparedData,
-          technicalIndicators: indicatorsData,
-          maxResults: 5,
-        },
-      });
+      let data: any = null;
+      let fnError: any = null;
+      let useLocalFallback = false;
 
-      // Check for AI credits exhausted error (402)
-      if (fnError || data?.error?.includes('credits')) {
-        addLog('WARN', '⚠️ Créditos de IA esgotados - usando análise técnica local');
+      try {
+        const result = await supabase.functions.invoke('multi-pair-analysis', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: {
+            marketData: preparedData,
+            technicalIndicators: indicatorsData,
+            maxResults: 5,
+          },
+        });
+        data = result.data;
+        fnError = result.error;
+      } catch (invokeError: any) {
+        // Capture network/invoke errors including 402
+        fnError = invokeError;
+        useLocalFallback = true;
+      }
+
+      // Check for AI credits exhausted error (402, 401, or any error message)
+      const isCreditsError = 
+        useLocalFallback ||
+        fnError?.message?.includes('402') ||
+        fnError?.message?.includes('401') ||
+        fnError?.message?.includes('credits') ||
+        fnError?.status === 402 ||
+        fnError?.status === 401 ||
+        data?.error?.includes('credits') ||
+        data?.error?.includes('exhausted') ||
+        data?.error?.includes('AI credits');
+
+      if (fnError || isCreditsError) {
+        addLog('WARN', '⚠️ API indisponível - usando análise técnica local');
         const localResult = performLocalAnalysis();
         setLastAnalysis(localResult);
         setOpportunities(localResult.bestOpportunities || []);
