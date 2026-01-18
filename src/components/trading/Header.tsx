@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
-import { Activity, Settings, Wifi, WifiOff, FlaskConical } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Settings, Wifi, WifiOff, FlaskConical, Volume2, VolumeX, LogOut, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { BotStats, BotConfig } from '@/types/trading';
@@ -11,9 +11,23 @@ interface HeaderProps {
   config: BotConfig;
   onToggleBot: () => void;
   connectionStatus?: ReactNode;
+  voiceEnabled?: boolean;
+  onToggleVoice?: () => void;
+  onSignOut?: () => void;
+  userEmail?: string;
 }
 
-export const Header = ({ stats, config, onToggleBot, connectionStatus }: HeaderProps) => {
+export const Header = ({ 
+  stats, 
+  config, 
+  onToggleBot, 
+  connectionStatus,
+  voiceEnabled = true,
+  onToggleVoice,
+  onSignOut,
+  userEmail
+}: HeaderProps) => {
+  const navigate = useNavigate();
   const isRunning = stats.status === 'RUNNING';
   
   return (
@@ -64,7 +78,7 @@ export const Header = ({ stats, config, onToggleBot, connectionStatus }: HeaderP
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1 md:gap-1.5">
         <Button
           variant="outline"
           size="sm"
@@ -79,6 +93,21 @@ export const Header = ({ stats, config, onToggleBot, connectionStatus }: HeaderP
           {isRunning ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
           <span className="hidden sm:inline">{isRunning ? 'Pausar' : 'Iniciar'}</span>
         </Button>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="default"
+              size="icon" 
+              className="h-8 w-8"
+              onClick={() => navigate('/performance')}
+            >
+              <BarChart3 className="w-4 h-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Performance</TooltipContent>
+        </Tooltip>
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Link to="/backtesting">
@@ -89,9 +118,42 @@ export const Header = ({ stats, config, onToggleBot, connectionStatus }: HeaderP
           </TooltipTrigger>
           <TooltipContent>Backtesting</TooltipContent>
         </Tooltip>
+
+        {onToggleVoice && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant={voiceEnabled ? "secondary" : "ghost"}
+                size="icon" 
+                className="h-8 w-8"
+                onClick={onToggleVoice}
+              >
+                {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-muted-foreground" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{voiceEnabled ? 'Voz ON' : 'Voz OFF'}</TooltipContent>
+          </Tooltip>
+        )}
+
         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
           <Settings className="w-4 h-4" />
         </Button>
+
+        {onSignOut && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={onSignOut}
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Sair{userEmail ? ` (${userEmail})` : ''}</TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </header>
   );
