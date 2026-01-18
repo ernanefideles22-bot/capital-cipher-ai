@@ -20,6 +20,7 @@ const strategyColors: Record<Trade['strategy'], string> = {
   SCALP: 'bg-accent/20 text-accent border-accent/30',
   DAYTRADE: 'bg-primary/20 text-primary border-primary/30',
   SWING: 'bg-warning/20 text-warning border-warning/30',
+  AI_AUTO: 'bg-profit/20 text-profit border-profit/30',
 };
 
 export const TradesTable = ({ trades, isRealMode = false }: TradesTableProps) => {

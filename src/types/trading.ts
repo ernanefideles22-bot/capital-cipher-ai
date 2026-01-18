@@ -1,6 +1,6 @@
 export type TradeSide = 'LONG' | 'SHORT';
 export type TradeStatus = 'OPEN' | 'CLOSED' | 'CANCELLED';
-export type StrategyType = 'SCALP' | 'DAYTRADE' | 'SWING';
+export type StrategyType = 'SCALP' | 'DAYTRADE' | 'SWING' | 'AI_AUTO';
 export type BotStatus = 'RUNNING' | 'PAUSED' | 'STOPPED';
 export type MarketMode = 'SPOT' | 'FUTURES';
 
@@ -21,6 +21,8 @@ export interface Trade {
   openedAt: Date;
   closedAt?: Date;
   notes?: string;
+  aiConfidence?: number;
+  aiReasoning?: string;
 }
 
 export interface MarketData {
@@ -76,7 +78,7 @@ export interface AIDecision {
 export interface LogEntry {
   id: string;
   timestamp: Date;
-  level: 'INFO' | 'WARN' | 'ERROR' | 'SUCCESS' | 'AI';
+  level: 'INFO' | 'WARN' | 'ERROR' | 'SUCCESS' | 'AI' | 'TRADE';
   message: string;
   details?: string;
 }
