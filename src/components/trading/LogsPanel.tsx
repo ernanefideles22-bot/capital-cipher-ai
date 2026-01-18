@@ -1,4 +1,4 @@
-import { Terminal, Info, AlertTriangle, CheckCircle, XCircle, Brain, Trash2 } from 'lucide-react';
+import { Terminal, Info, AlertTriangle, CheckCircle, XCircle, Brain, Trash2, ArrowRightLeft } from 'lucide-react';
 import type { LogEntry } from '@/types/trading';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -9,12 +9,13 @@ interface LogsPanelProps {
   onClearLogs?: () => void;
 }
 
-const levelConfig = {
+const levelConfig: Record<LogEntry['level'], { icon: typeof Info; color: string; bg: string }> = {
   INFO: { icon: Info, color: 'text-accent', bg: 'bg-accent/10' },
   WARN: { icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10' },
   ERROR: { icon: XCircle, color: 'text-loss', bg: 'bg-loss/10' },
   SUCCESS: { icon: CheckCircle, color: 'text-profit', bg: 'bg-profit/10' },
   AI: { icon: Brain, color: 'text-primary', bg: 'bg-primary/10' },
+  TRADE: { icon: ArrowRightLeft, color: 'text-profit', bg: 'bg-profit/10' },
 };
 
 export const LogsPanel = ({ logs, isRealMode = false, onClearLogs }: LogsPanelProps) => {
