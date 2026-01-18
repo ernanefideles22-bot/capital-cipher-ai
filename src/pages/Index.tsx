@@ -129,6 +129,8 @@ const Index = () => {
       maxDrawdownPercent: config.maxDrawdown,
       riskPerTradePercent: config.riskPerTrade,
     },
+    sendRealOrders: isRealMode, // Send real orders when in real mode
+    leverage: config.leverage,
   });
 
   // Toggle bot status based on mode - now uses autonomous bot
