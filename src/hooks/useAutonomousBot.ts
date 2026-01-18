@@ -275,6 +275,149 @@ export const useAutonomousBot = ({
     return allocation;
   }, [getAvailableCapital, accountBalance, rules, openTrades.length, addLog]);
 
+  // Fallback local analysis using technical indicators when AI credits are exhausted
+  const performLocalAnalysis = useCallback((): MultiPairAnalysisResult => {
+    addLog('INFO', '🔧 Executando análise técnica local (fallback)...');
+    
+    const opportunities: BotOpportunity[] = [];
+    
+    Object.entries(marketData).forEach(([symbol, data]) => {
+      const indicators = technicalIndicators?.[symbol];
+      if (!indicators || data.price <= 0) return;
+      
+      let score = 50;
+      let confidence = 50;
+      let recommendation: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
+      const reasons: string[] = [];
+      
+      // RSI Analysis
+      if (indicators.rsi < 30) {
+        score += 15;
+        confidence += 10;
+        reasons.push(`RSI oversold (${indicators.rsi.toFixed(1)})`);
+      } else if (indicators.rsi > 70) {
+        score += 15;
+        confidence += 10;
+        reasons.push(`RSI overbought (${indicators.rsi.toFixed(1)})`);
+      }
+      
+      // MACD Analysis
+      if (indicators.macdHistogram > 0 && indicators.macdTrend === 'BULLISH') {
+        score += 10;
+        confidence += 5;
+        reasons.push('MACD bullish');
+      } else if (indicators.macdHistogram < 0 && indicators.macdTrend === 'BEARISH') {
+        score += 10;
+        confidence += 5;
+        reasons.push('MACD bearish');
+      }
+      
+      // EMA Trend
+      if (indicators.emaTrend === 'STRONG_BULLISH') {
+        score += 10;
+        confidence += 5;
+        reasons.push('Strong uptrend');
+      } else if (indicators.emaTrend === 'STRONG_BEARISH') {
+        score += 10;
+        confidence += 5;
+        reasons.push('Strong downtrend');
+      }
+      
+      // Bollinger Position
+      if (indicators.bollingerPosition === 'BELOW_LOWER') {
+        score += 10;
+        reasons.push('Below Bollinger lower');
+      } else if (indicators.bollingerPosition === 'ABOVE_UPPER') {
+        score += 10;
+        reasons.push('Above Bollinger upper');
+      }
+      
+      // Volume confirmation
+      if (indicators.volumeRatio > 1.5) {
+        score += 5;
+        confidence += 5;
+        reasons.push(`High volume (${indicators.volumeRatio.toFixed(1)}x)`);
+      }
+      
+      // Signal strength boost
+      if (indicators.signalStrength > 70) {
+        score += 10;
+        confidence += 10;
+      }
+      
+      // Determine recommendation
+      const isBullish = indicators.rsi < 40 && 
+        (indicators.macdTrend === 'BULLISH' || indicators.emaTrend?.includes('BULLISH'));
+      const isBearish = indicators.rsi > 60 && 
+        (indicators.macdTrend === 'BEARISH' || indicators.emaTrend?.includes('BEARISH'));
+      
+      if (isBullish && score >= 65) {
+        recommendation = 'BUY';
+      } else if (isBearish && score >= 65) {
+        recommendation = 'SELL';
+      }
+      
+      // Calculate entry, SL, TP
+      const atr = indicators.atr || data.price * 0.02;
+      const entryPrice = data.price;
+      let stopLoss: number;
+      let takeProfit: number;
+      
+      if (recommendation === 'BUY') {
+        stopLoss = Math.max(indicators.nearestSupport || (entryPrice - atr * 2), entryPrice - atr * 2);
+        takeProfit = indicators.nearestResistance || (entryPrice + atr * 3);
+      } else if (recommendation === 'SELL') {
+        stopLoss = Math.min(indicators.nearestResistance || (entryPrice + atr * 2), entryPrice + atr * 2);
+        takeProfit = indicators.nearestSupport || (entryPrice - atr * 3);
+      } else {
+        stopLoss = entryPrice - atr * 1.5;
+        takeProfit = entryPrice + atr * 1.5;
+      }
+      
+      const riskReward = Math.abs(takeProfit - entryPrice) / Math.abs(entryPrice - stopLoss);
+      
+      // Only add if score is high enough
+      if (score >= 60 && recommendation !== 'HOLD') {
+        opportunities.push({
+          symbol,
+          recommendation,
+          confidence: Math.min(95, confidence),
+          score: Math.min(100, score),
+          reasoning: reasons.join(', ') || 'Technical analysis',
+          entryPrice,
+          stopLoss,
+          takeProfit,
+          riskRewardRatio: riskReward,
+          suggestedStrategy: 'DAYTRADE',
+          professionalStrategy: 'MOMENTUM',
+        });
+      }
+    });
+    
+    // Sort by score
+    opportunities.sort((a, b) => b.score - a.score);
+    const topOpps = opportunities.slice(0, 5);
+    
+    const result: MultiPairAnalysisResult = {
+      success: true,
+      timestamp: new Date().toISOString(),
+      pairsAnalyzed: Object.keys(marketData).length,
+      bestOpportunities: topOpps,
+      marketOverview: `Análise técnica local: ${topOpps.length} oportunidades encontradas`,
+      topPick: topOpps.length > 0 ? {
+        symbol: topOpps[0].symbol,
+        action: topOpps[0].recommendation as 'BUY' | 'SELL',
+        urgency: topOpps[0].score >= 80 ? 'high' : topOpps[0].score >= 70 ? 'medium' : 'low',
+      } : null,
+      neuralEnabled: false,
+      neuralInsights: 'Usando análise técnica local (AI credits esgotados)',
+    };
+    
+    addLog('AI', `📊 Análise local: ${topOpps.length} oportunidades (${topOpps.map(o => o.symbol).join(', ')})`);
+    
+    return result;
+  }, [marketData, technicalIndicators, addLog]);
+
   const analyzeAllPairs = useCallback(async (): Promise<MultiPairAnalysisResult | null> => {
     if (Object.keys(marketData).length === 0) {
       addLog('WARN', 'Sem dados de mercado disponíveis para análise');
@@ -352,7 +495,14 @@ export const useAutonomousBot = ({
         },
       });
 
-      if (fnError) throw fnError;
+      // Check for AI credits exhausted error (402)
+      if (fnError || data?.error?.includes('credits')) {
+        addLog('WARN', '⚠️ Créditos de IA esgotados - usando análise técnica local');
+        const localResult = performLocalAnalysis();
+        setLastAnalysis(localResult);
+        setOpportunities(localResult.bestOpportunities || []);
+        return localResult;
+      }
 
       if (data?.success) {
         setLastAnalysis(data);
@@ -371,17 +521,27 @@ export const useAutonomousBot = ({
 
         return data;
       } else {
-        throw new Error(data?.error || 'Resposta inválida do serviço');
+        // If API fails for any reason, use local analysis
+        addLog('WARN', '⚠️ Erro na API - usando análise técnica local');
+        const localResult = performLocalAnalysis();
+        setLastAnalysis(localResult);
+        setOpportunities(localResult.bestOpportunities || []);
+        return localResult;
       }
     } catch (err) {
+      // On any error, fall back to local analysis
       const message = err instanceof Error ? err.message : 'Erro ao analisar mercado';
-      setError(message);
-      addLog('ERROR', `❌ ${message}`);
-      return null;
+      addLog('WARN', `⚠️ ${message} - usando análise técnica local`);
+      
+      const localResult = performLocalAnalysis();
+      setLastAnalysis(localResult);
+      setOpportunities(localResult.bestOpportunities || []);
+      setError(null); // Clear error since we have a fallback
+      return localResult;
     } finally {
       setIsAnalyzing(false);
     }
-  }, [marketData, addLog]);
+  }, [marketData, technicalIndicators, addLog, performLocalAnalysis]);
 
   const executeOpportunity = useCallback(async (opportunity: BotOpportunity, allocatedCapitalForTrade?: number) => {
     // Check all trading rules first
