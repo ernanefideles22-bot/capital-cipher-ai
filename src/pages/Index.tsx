@@ -19,6 +19,7 @@ import { BybitPositionsPanel } from '@/components/trading/BybitPositionsPanel';
 import { BybitOrdersPanel } from '@/components/trading/BybitOrdersPanel';
 import { BotOpportunitiesPanel } from '@/components/trading/BotOpportunitiesPanel';
 import { ActiveTradesWidget } from '@/components/trading/ActiveTradesWidget';
+import { ActiveOperationsCharts } from '@/components/trading/ActiveOperationsCharts';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useRealtimePrices } from '@/hooks/useRealtimePrices';
 import { useTechnicalIndicators } from '@/hooks/useTechnicalIndicators';
@@ -453,6 +454,13 @@ const Index = () => {
             Configurações
           </Button>
         </section>
+
+        {/* Active Operations Charts - Above Price Cards */}
+        {isRealMode && positions.length > 0 && (
+          <section>
+            <ActiveOperationsCharts positions={positions} />
+          </section>
+        )}
 
         {/* Price Tickers - Click to select */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
