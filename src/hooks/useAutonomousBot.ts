@@ -4,6 +4,13 @@ import { toast } from 'sonner';
 import type { MarketData, Trade, AIDecision, LogEntry } from '@/types/trading';
 import { useBybitAPI } from '@/hooks/useBybitAPI';
 
+export interface InstitutionalSignals {
+  orderFlow: 'ACCUMULATION' | 'DISTRIBUTION' | 'NEUTRAL';
+  smartMoney: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  volumeProfile: 'ABOVE_POC' | 'BELOW_POC' | 'AT_POC';
+  liquidityZone: 'NEAR_LIQUIDITY' | 'CLEAR';
+}
+
 export interface BotOpportunity {
   symbol: string;
   recommendation: 'BUY' | 'SELL' | 'HOLD';
@@ -18,6 +25,14 @@ export interface BotOpportunity {
   originalScore?: number;
   originalConfidence?: number;
   suggestedStrategy?: 'SCALP' | 'DAYTRADE' | 'SWING';
+  professionalStrategy?: 'MOMENTUM' | 'MEAN_REVERSION' | 'BREAKOUT' | 'INSTITUTIONAL_FLOW' | 'WYCKOFF' | 'SMART_MONEY';
+  institutionalSignals?: InstitutionalSignals;
+}
+
+export interface InstitutionalBias {
+  overall: 'RISK_ON' | 'RISK_OFF' | 'NEUTRAL';
+  btcDominance: 'RISING' | 'FALLING' | 'STABLE';
+  marketPhase: 'ACCUMULATION' | 'MARKUP' | 'DISTRIBUTION' | 'MARKDOWN';
 }
 
 export interface MultiPairAnalysisResult {
@@ -37,6 +52,8 @@ export interface MultiPairAnalysisResult {
   neuralAccuracy?: number;
   neuralBonuses?: string[];
   neuralInsights?: string;
+  // Institutional analysis
+  institutionalBias?: InstitutionalBias;
 }
 
 interface TradingRules {
