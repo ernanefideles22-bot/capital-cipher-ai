@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Settings, Zap, Shield, Target, Layers } from 'lucide-react';
+import { Settings, Zap, Shield, Target, Layers, Loader2 } from 'lucide-react';
 import type { BotConfig } from '@/types/trading';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
@@ -9,10 +9,11 @@ import { cn } from '@/lib/utils';
 
 interface ConfigPanelProps {
   config: BotConfig;
-  onUpdateConfig: (config: Partial<BotConfig>) => void;
+  onUpdateConfig: (config: Partial<BotConfig>) => void | Promise<void>;
+  saving?: boolean;
 }
 
-export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
+export const ConfigPanel = ({ config, onUpdateConfig, saving = false }: ConfigPanelProps) => {
   // Draft state so inputs always move smoothly; changes are applied only when user clicks OK.
   const [draft, setDraft] = useState<BotConfig>(config);
 
@@ -30,12 +31,6 @@ export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
 
   const handleCancel = () => setDraft(config);
   const handleApply = () => {
-    // Save to localStorage for persistence across page navigation
-    try {
-      localStorage.setItem('bot_config', JSON.stringify(draft));
-    } catch {
-      // ignore
-    }
     onUpdateConfig(draft);
   };
 
@@ -46,8 +41,14 @@ export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
           <Settings className="w-5 h-5 text-muted-foreground" />
           <h3 className="font-semibold">Configurações</h3>
         </div>
-        {isDirty && (
+        {isDirty && !saving && (
           <span className="text-xs text-muted-foreground">Alterações pendentes</span>
+        )}
+        {saving && (
+          <span className="text-xs text-accent flex items-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Salvando...
+          </span>
         )}
       </div>
 
@@ -203,8 +204,15 @@ export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
           >
             Cancelar
           </Button>
-          <Button type="button" size="sm" onClick={handleApply} disabled={!isDirty}>
-            OK
+          <Button type="button" size="sm" onClick={handleApply} disabled={!isDirty || saving}>
+            {saving ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                Salvando
+              </>
+            ) : (
+              'OK'
+            )}
           </Button>
         </div>
       </div>
