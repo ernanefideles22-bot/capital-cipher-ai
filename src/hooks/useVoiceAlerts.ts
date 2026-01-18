@@ -15,7 +15,7 @@ const defaultOptions: VoiceAlertOptions = {
   volume: 1,
   rate: 1,
   pitch: 1,
-  useElevenLabs: true,
+  useElevenLabs: false, // Disabled by default - ElevenLabs requires paid plan
   voiceId: 'EXAVITQu4vr4xnSDxMaL',
 };
 
