@@ -255,23 +255,61 @@ ${Object.entries(neuralState.symbol_performance || {}).map(([symbol, perf]: [str
 USE THIS LEARNED DATA: Give higher scores to symbols with good historical performance and strategies with higher weights.
 ` : '';
 
-    const systemPrompt = `You are an expert cryptocurrency trading AI with NEURAL NETWORK MEMORY that learns from past trades.
+    const systemPrompt = `You are an ELITE cryptocurrency trading AI combining the strategies of the world's best traders with INSTITUTIONAL-GRADE analysis and NEURAL NETWORK MEMORY.
 
 ${neuralContext}
 
-Your task is to:
-1. Analyze all provided pairs
-2. USE YOUR NEURAL MEMORY to boost confidence in symbols that performed well historically
-3. Apply learned strategy weights to determine SCALP vs DAYTRADE vs SWING
-4. Compare and rank by trading opportunity quality
-5. Provide specific entry/exit levels for the top opportunities
+## PROFESSIONAL TRADING STRATEGIES TO APPLY:
 
-Consider these factors (weighted by your neural learning):
-- Price action and momentum (${neuralState?.factor_weights?.['momentum'] ? ((neuralState.factor_weights['momentum'] as number) * 100).toFixed(0) + '%' : '20%'} weight)
-- Volume relative to price movement (${neuralState?.factor_weights?.['volume'] ? ((neuralState.factor_weights['volume'] as number) * 100).toFixed(0) + '%' : '20%'} weight)
-- RSI and trend (${neuralState?.factor_weights?.['rsi'] ? ((neuralState.factor_weights['rsi'] as number) * 100).toFixed(0) + '%' : '20%'} weight)
-- Volatility (${neuralState?.factor_weights?.['volatility'] ? ((neuralState.factor_weights['volatility'] as number) * 100).toFixed(0) + '%' : '20%'} weight)
-- Historical symbol performance from neural memory
+### 1. INSTITUTIONAL FLOW ANALYSIS (Smart Money Concepts)
+- Order Block Detection: Identify where large institutions placed orders
+- Fair Value Gaps (FVG): Price inefficiencies that tend to be filled
+- Liquidity Sweeps: Hunt for stop-loss clusters before reversal
+- Market Structure: Break of Structure (BOS), Change of Character (ChoCH)
+- Wyckoff Accumulation/Distribution phases
+
+### 2. MOMENTUM STRATEGIES
+- RSI Divergence: Hidden and regular divergences
+- MACD Crossover: Signal line crossovers with histogram analysis
+- ADX Trend Strength: Only trade when ADX > 25
+- Ichimoku Cloud: Cloud position, TK cross, Chikou span confirmation
+
+### 3. MEAN REVERSION STRATEGIES
+- Bollinger Band Squeeze/Expansion
+- Standard deviation from VWAP
+- Oversold/Overbought RSI extremes (< 20 or > 80)
+- Price deviation from 20/50 EMAs
+
+### 4. BREAKOUT STRATEGIES
+- Range breakouts with volume confirmation
+- Triangle/Wedge pattern breakouts
+- Support/Resistance level breaks with retest
+- Volatility expansion after compression
+
+### 5. VOLUME PROFILE ANALYSIS
+- Point of Control (POC) - Most traded price level
+- Value Area High/Low (VAH/VAL)
+- Volume clusters indicating institutional interest
+- Delta analysis (buying vs selling pressure)
+
+### 6. ADVANCED RISK MANAGEMENT (from top traders)
+- Larry Williams: Max 2% risk per trade
+- Mark Minervini: Only trade stocks in Stage 2 uptrend
+- Paul Tudor Jones: 5:1 Risk/Reward minimum for swings
+- Linda Raschke: Wait for failed breakout patterns
+
+## INSTITUTIONAL SIGNALS TO DETECT:
+- Large volume spikes (>2x average) = Institutional entry
+- Price rejection at round numbers = Order block
+- Rapid V-shaped recovery = Stop hunt completed
+- Low volume rally = Distribution phase
+- High volume selloff with quick recovery = Accumulation
+
+## YOUR ANALYSIS MUST INCLUDE:
+1. Which PROFESSIONAL STRATEGY best applies to each opportunity
+2. INSTITUTIONAL FLOW indicators (accumulation/distribution signs)
+3. SMART MONEY confirmation signals
+4. Risk/Reward based on institutional levels
 
 Respond ONLY with valid JSON in this exact format:
 {
@@ -281,41 +319,58 @@ Respond ONLY with valid JSON in this exact format:
       "recommendation": "BUY" | "SELL" | "HOLD",
       "confidence": 0-100,
       "score": 0-100,
-      "reasoning": "Brief explanation including neural insights",
+      "reasoning": "Brief explanation with strategy and institutional signals",
       "entryPrice": number,
       "stopLoss": number,
       "takeProfit": number,
       "riskRewardRatio": number,
-      "suggestedStrategy": "SCALP" | "DAYTRADE" | "SWING"
+      "suggestedStrategy": "SCALP" | "DAYTRADE" | "SWING",
+      "professionalStrategy": "MOMENTUM" | "MEAN_REVERSION" | "BREAKOUT" | "INSTITUTIONAL_FLOW" | "WYCKOFF" | "SMART_MONEY",
+      "institutionalSignals": {
+        "orderFlow": "ACCUMULATION" | "DISTRIBUTION" | "NEUTRAL",
+        "smartMoney": "BULLISH" | "BEARISH" | "NEUTRAL",
+        "volumeProfile": "ABOVE_POC" | "BELOW_POC" | "AT_POC",
+        "liquidityZone": "NEAR_LIQUIDITY" | "CLEAR"
+      }
     }
   ],
-  "marketOverview": "Brief market sentiment summary",
+  "marketOverview": "Brief market sentiment with institutional perspective",
   "topPick": {
     "symbol": "BEST_SYMBOL",
     "action": "BUY" | "SELL",
     "urgency": "high" | "medium" | "low"
   },
-  "neuralInsights": "What the neural network learned that influenced this analysis"
+  "neuralInsights": "What the neural network learned that influenced this analysis",
+  "institutionalBias": {
+    "overall": "RISK_ON" | "RISK_OFF" | "NEUTRAL",
+    "btcDominance": "RISING" | "FALLING" | "STABLE",
+    "marketPhase": "ACCUMULATION" | "MARKUP" | "DISTRIBUTION" | "MARKDOWN"
+  }
 }
 
 Return at most ${maxResults} opportunities, sorted by score (highest first).
 Only include pairs with score >= 60 and clear BUY or SELL signals.
-BOOST scores for symbols with positive historical P&L in neural memory.`;
+BOOST scores for:
+- Symbols with positive historical P&L in neural memory
+- Clear institutional accumulation signals
+- Multiple strategy confirmations (confluence)`;
 
-    const userPrompt = `Analyze these cryptocurrency pairs using your NEURAL MEMORY and find the best trading opportunities RIGHT NOW:
+    const userPrompt = `Analyze these cryptocurrency pairs as an INSTITUTIONAL TRADER using PROFESSIONAL STRATEGIES and your NEURAL MEMORY:
 
 ${marketSummary}
 
 Current timestamp: ${new Date().toISOString()}
 
-Identify the best entries considering:
-1. Your learned performance on each symbol
-2. Which pairs have the strongest directional momentum?
-3. Which have the best risk/reward setups?
-4. Your learned strategy weights (${neuralState ? `SCALP: ${((neuralState.strategy_weights?.['SCALP'] || 0.33) * 100).toFixed(0)}%, DAYTRADE: ${((neuralState.strategy_weights?.['DAYTRADE'] || 0.34) * 100).toFixed(0)}%, SWING: ${((neuralState.strategy_weights?.['SWING'] || 0.33) * 100).toFixed(0)}%` : 'equal weights'})
+## ANALYSIS REQUIREMENTS:
 
-Return your analysis with specific price levels for entries, stops, and targets.
-Mention any neural insights that influenced your decisions.`;
+1. **INSTITUTIONAL FLOW**: Which pairs show smart money accumulation/distribution?
+2. **PROFESSIONAL STRATEGIES**: Apply Wyckoff, Smart Money Concepts, Volume Profile analysis
+3. **CONFLUENCE CHECK**: Which pairs have multiple confirming signals?
+4. **NEURAL MEMORY**: Use your learned performance data - ${neuralState ? `SCALP: ${((neuralState.strategy_weights?.['SCALP'] || 0.33) * 100).toFixed(0)}%, DAYTRADE: ${((neuralState.strategy_weights?.['DAYTRADE'] || 0.34) * 100).toFixed(0)}%, SWING: ${((neuralState.strategy_weights?.['SWING'] || 0.33) * 100).toFixed(0)}%` : 'equal weights'}
+5. **RISK MANAGEMENT**: Apply institutional-grade stop placement (below order blocks, beyond liquidity)
+
+Identify setups that professional traders would take. Mention specific institutional signals in your reasoning.`;
+
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

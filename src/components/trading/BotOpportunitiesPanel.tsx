@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Target, Shield, Zap, Brain, Loader2, BarChart2, Sparkles } from 'lucide-react';
+import { 
+  TrendingUp, TrendingDown, Target, Shield, Zap, Brain, Loader2, BarChart2, Sparkles,
+  Building2, Activity, Layers, ArrowUpCircle, ArrowDownCircle, Circle
+} from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -127,6 +130,57 @@ export const BotOpportunitiesPanel = ({
       {lastAnalysis?.marketOverview && (
         <div className="p-2 rounded-lg bg-muted/30 border border-border mb-3">
           <p className="text-xs text-muted-foreground">{lastAnalysis.marketOverview}</p>
+        </div>
+      )}
+
+      {/* Institutional Bias Panel */}
+      {lastAnalysis?.institutionalBias && (
+        <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/30 mb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Building2 className="w-3.5 h-3.5 text-blue-400" />
+            <span className="text-xs font-medium text-blue-400">Análise Institucional</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mt-1">
+            <div className="text-center">
+              <p className="text-[9px] text-muted-foreground">Mercado</p>
+              <Badge 
+                variant="outline" 
+                className={cn(
+                  "text-[9px] px-1 py-0",
+                  lastAnalysis.institutionalBias.overall === 'RISK_ON' ? "border-profit text-profit" :
+                  lastAnalysis.institutionalBias.overall === 'RISK_OFF' ? "border-loss text-loss" :
+                  "border-muted-foreground text-muted-foreground"
+                )}
+              >
+                {lastAnalysis.institutionalBias.overall === 'RISK_ON' ? '🟢 Risk On' :
+                 lastAnalysis.institutionalBias.overall === 'RISK_OFF' ? '🔴 Risk Off' : '⚪ Neutro'}
+              </Badge>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-muted-foreground">BTC Dom.</p>
+              <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-500/50 text-blue-300">
+                {lastAnalysis.institutionalBias.btcDominance === 'RISING' ? '📈 Subindo' :
+                 lastAnalysis.institutionalBias.btcDominance === 'FALLING' ? '📉 Caindo' : '➡️ Estável'}
+              </Badge>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-muted-foreground">Fase Wyckoff</p>
+              <Badge 
+                variant="outline" 
+                className={cn(
+                  "text-[9px] px-1 py-0",
+                  lastAnalysis.institutionalBias.marketPhase === 'ACCUMULATION' ? "border-profit text-profit" :
+                  lastAnalysis.institutionalBias.marketPhase === 'MARKUP' ? "border-profit text-profit" :
+                  lastAnalysis.institutionalBias.marketPhase === 'DISTRIBUTION' ? "border-loss text-loss" :
+                  "border-loss text-loss"
+                )}
+              >
+                {lastAnalysis.institutionalBias.marketPhase === 'ACCUMULATION' ? '📥 Acumulação' :
+                 lastAnalysis.institutionalBias.marketPhase === 'MARKUP' ? '🚀 Markup' :
+                 lastAnalysis.institutionalBias.marketPhase === 'DISTRIBUTION' ? '📤 Distribuição' : '📉 Markdown'}
+              </Badge>
+            </div>
+          </div>
         </div>
       )}
 
@@ -290,12 +344,67 @@ export const BotOpportunitiesPanel = ({
                       1:{opp.riskRewardRatio?.toFixed(2) || '—'}
                     </Badge>
                   </div>
-                  {opp.suggestedStrategy && (
-                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-purple-500/50 text-purple-400">
-                      {opp.suggestedStrategy}
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {opp.professionalStrategy && (
+                      <Badge variant="outline" className="text-[8px] px-1 py-0 border-blue-500/50 text-blue-400">
+                        {opp.professionalStrategy.replace('_', ' ')}
+                      </Badge>
+                    )}
+                    {opp.suggestedStrategy && (
+                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-purple-500/50 text-purple-400">
+                        {opp.suggestedStrategy}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
+
+                {/* Institutional Signals */}
+                {opp.institutionalSignals && (
+                  <div className="grid grid-cols-4 gap-1 mb-2">
+                    <div className="text-center p-1 rounded bg-muted/30">
+                      <p className="text-[8px] text-muted-foreground">Fluxo</p>
+                      <div className={cn(
+                        "text-[9px] font-medium",
+                        opp.institutionalSignals.orderFlow === 'ACCUMULATION' ? "text-profit" :
+                        opp.institutionalSignals.orderFlow === 'DISTRIBUTION' ? "text-loss" : "text-muted-foreground"
+                      )}>
+                        {opp.institutionalSignals.orderFlow === 'ACCUMULATION' ? '📥' :
+                         opp.institutionalSignals.orderFlow === 'DISTRIBUTION' ? '📤' : '⚪'}
+                      </div>
+                    </div>
+                    <div className="text-center p-1 rounded bg-muted/30">
+                      <p className="text-[8px] text-muted-foreground">Smart $</p>
+                      <div className={cn(
+                        "text-[9px] font-medium",
+                        opp.institutionalSignals.smartMoney === 'BULLISH' ? "text-profit" :
+                        opp.institutionalSignals.smartMoney === 'BEARISH' ? "text-loss" : "text-muted-foreground"
+                      )}>
+                        {opp.institutionalSignals.smartMoney === 'BULLISH' ? '🐂' :
+                         opp.institutionalSignals.smartMoney === 'BEARISH' ? '🐻' : '—'}
+                      </div>
+                    </div>
+                    <div className="text-center p-1 rounded bg-muted/30">
+                      <p className="text-[8px] text-muted-foreground">POC</p>
+                      <div className={cn(
+                        "text-[9px] font-medium",
+                        opp.institutionalSignals.volumeProfile === 'ABOVE_POC' ? "text-profit" :
+                        opp.institutionalSignals.volumeProfile === 'BELOW_POC' ? "text-loss" : "text-warning"
+                      )}>
+                        {opp.institutionalSignals.volumeProfile === 'ABOVE_POC' ? '⬆️' :
+                         opp.institutionalSignals.volumeProfile === 'BELOW_POC' ? '⬇️' : '➡️'}
+                      </div>
+                    </div>
+                    <div className="text-center p-1 rounded bg-muted/30">
+                      <p className="text-[8px] text-muted-foreground">Liq.</p>
+                      <div className={cn(
+                        "text-[9px] font-medium",
+                        opp.institutionalSignals.liquidityZone === 'NEAR_LIQUIDITY' ? "text-warning" : "text-profit"
+                      )}>
+                        {opp.institutionalSignals.liquidityZone === 'NEAR_LIQUIDITY' ? '⚠️' : '✅'}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Reasoning */}
                 <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2">
