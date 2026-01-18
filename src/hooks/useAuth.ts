@@ -69,22 +69,6 @@ export const useAuth = () => {
     return { data, error };
   }, []);
 
-  const signInWithPhone = useCallback(async (phone: string) => {
-    const { data, error } = await supabase.auth.signInWithOtp({
-      phone,
-    });
-    return { data, error };
-  }, []);
-
-  const verifyPhoneOtp = useCallback(async (phone: string, token: string) => {
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone,
-      token,
-      type: 'sms',
-    });
-    return { data, error };
-  }, []);
-
   return {
     user,
     session,
@@ -93,7 +77,5 @@ export const useAuth = () => {
     signIn,
     signOut,
     signInWithGoogle,
-    signInWithPhone,
-    verifyPhoneOtp,
   };
 };
