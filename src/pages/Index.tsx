@@ -24,7 +24,7 @@ import type { Trade, BotStats } from '@/types/trading';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Settings } from 'lucide-react';
+import { AlertCircle, Settings, Play, Pause } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -186,7 +186,7 @@ const Index = () => {
       />
       
       <main className="px-3 md:px-4 lg:px-6 py-3 space-y-3 max-w-[1600px] mx-auto">
-        {/* Mode Indicator Banner */}
+        {/* Mode Indicator Banner with Bot Control */}
         {isRealMode && (
           <div className="bg-profit/10 border border-profit/30 rounded-lg p-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -195,9 +195,29 @@ const Index = () => {
                 Modo Conta Real - Operações reais na Bybit
               </span>
             </div>
-            <Badge variant="outline" className="border-profit text-profit">
-              Saldo: ${wallet?.totalEquity.toLocaleString('en-US', { maximumFractionDigits: 2 }) ?? '--'}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={botStats.status === 'RUNNING' ? 'destructive' : 'default'}
+                onClick={toggleBotStatus}
+                className="h-7 px-3 gap-1.5"
+              >
+                {botStats.status === 'RUNNING' ? (
+                  <>
+                    <Pause className="w-3 h-3" />
+                    Parar
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3 h-3" />
+                    Iniciar
+                  </>
+                )}
+              </Button>
+              <Badge variant="outline" className="border-profit text-profit">
+                Saldo: ${wallet?.totalEquity.toLocaleString('en-US', { maximumFractionDigits: 2 }) ?? '--'}
+              </Badge>
+            </div>
           </div>
         )}
 
@@ -209,9 +229,29 @@ const Index = () => {
                 Modo Demo - Dados simulados para teste
               </span>
             </div>
-            <Badge variant="outline" className="border-warning text-warning">
-              Simulação
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={botStats.status === 'RUNNING' ? 'destructive' : 'default'}
+                onClick={toggleBotStatus}
+                className="h-7 px-3 gap-1.5"
+              >
+                {botStats.status === 'RUNNING' ? (
+                  <>
+                    <Pause className="w-3 h-3" />
+                    Parar
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3 h-3" />
+                    Iniciar
+                  </>
+                )}
+              </Button>
+              <Badge variant="outline" className="border-warning text-warning">
+                Simulação
+              </Badge>
+            </div>
           </div>
         )}
 
