@@ -1,9 +1,11 @@
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, TrendingDown, RefreshCw, BarChart3, Loader2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, RefreshCw, BarChart3, Loader2, LineChart } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { FloatingPositionChart } from './FloatingPositionChart';
 
 interface Position {
   symbol: string;
@@ -24,6 +26,7 @@ interface BybitPositionsPanelProps {
 }
 
 export const BybitPositionsPanel = ({ positions, loading, onRefresh }: BybitPositionsPanelProps) => {
+  const [expandedPosition, setExpandedPosition] = useState<string | null>(null);
   const totalPnL = positions.reduce((sum, pos) => sum + parseFloat(pos.unrealisedPnl || '0'), 0);
   
   return (
@@ -95,55 +98,92 @@ export const BybitPositionsPanel = ({ positions, loading, onRefresh }: BybitPosi
                 {positions.map((pos, idx) => {
                   const pnl = parseFloat(pos.unrealisedPnl || '0');
                   const isLong = pos.side === 'Buy';
+                  const posKey = `${pos.symbol}-${idx}`;
+                  const isExpanded = expandedPosition === posKey;
                   
                   return (
-                    <TableRow key={idx} className="hover:bg-muted/30">
-                      <TableCell className="py-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-xs font-medium">{pos.symbol.replace('USDT', '')}</span>
-                          <Badge variant="outline" className="text-[10px] px-1 h-4">
-                            {pos.leverage || '1'}x
+                    <React.Fragment key={idx}>
+                      <TableRow 
+                        className={cn(
+                          "hover:bg-muted/30 cursor-pointer transition-colors",
+                          isExpanded && "bg-muted/20"
+                        )}
+                        onClick={() => setExpandedPosition(isExpanded ? null : posKey)}
+                      >
+                        <TableCell className="py-2">
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedPosition(isExpanded ? null : posKey);
+                              }}
+                            >
+                              <LineChart className={cn(
+                                "h-3.5 w-3.5 transition-colors",
+                                isExpanded ? "text-primary" : "text-muted-foreground"
+                              )} />
+                            </Button>
+                            <span className="font-mono text-xs font-medium">{pos.symbol.replace('USDT', '')}</span>
+                            <Badge variant="outline" className="text-[10px] px-1 h-4">
+                              {pos.leverage || '1'}x
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-2">
+                          <Badge 
+                            variant={isLong ? 'default' : 'destructive'} 
+                            className={cn(
+                              "text-[10px] px-1.5 h-5",
+                              isLong ? "bg-profit/20 text-profit hover:bg-profit/30" : "bg-loss/20 text-loss hover:bg-loss/30"
+                            )}
+                          >
+                            <span className="flex items-center gap-0.5">
+                              {isLong ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                              {isLong ? 'LONG' : 'SHORT'}
+                            </span>
                           </Badge>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-2">
-                        <Badge 
-                          variant={isLong ? 'default' : 'destructive'} 
-                          className={cn(
-                            "text-[10px] px-1.5 h-5",
-                            isLong ? "bg-profit/20 text-profit hover:bg-profit/30" : "bg-loss/20 text-loss hover:bg-loss/30"
-                          )}
-                        >
-                          <span className="flex items-center gap-0.5">
-                            {isLong ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                            {isLong ? 'LONG' : 'SHORT'}
+                        </TableCell>
+                        <TableCell className="py-2 text-right font-mono text-xs">
+                          {parseFloat(pos.size).toFixed(4)}
+                        </TableCell>
+                        <TableCell className="py-2 text-right font-mono text-xs text-muted-foreground">
+                          ${parseFloat(pos.entryPrice).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell className="py-2 text-right font-mono text-xs">
+                          ${parseFloat(pos.markPrice).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell className="py-2 text-right">
+                          <span className={cn(
+                            "font-mono text-xs font-medium flex items-center justify-end gap-0.5",
+                            pnl >= 0 ? "text-profit" : "text-loss"
+                          )}>
+                            {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
                           </span>
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="py-2 text-right font-mono text-xs">
-                        {parseFloat(pos.size).toFixed(4)}
-                      </TableCell>
-                      <TableCell className="py-2 text-right font-mono text-xs text-muted-foreground">
-                        ${parseFloat(pos.entryPrice).toLocaleString('en-US', { maximumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="py-2 text-right font-mono text-xs">
-                        ${parseFloat(pos.markPrice).toLocaleString('en-US', { maximumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="py-2 text-right">
-                        <span className={cn(
-                          "font-mono text-xs font-medium flex items-center justify-end gap-0.5",
-                          pnl >= 0 ? "text-profit" : "text-loss"
-                        )}>
-                          {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-2 text-right font-mono text-xs text-muted-foreground">
-                        {pos.liqPrice && pos.liqPrice !== '0' 
-                          ? `$${parseFloat(pos.liqPrice).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
-                          : '-'
-                        }
-                      </TableCell>
-                    </TableRow>
+                        </TableCell>
+                        <TableCell className="py-2 text-right font-mono text-xs text-muted-foreground">
+                          {pos.liqPrice && pos.liqPrice !== '0' 
+                            ? `$${parseFloat(pos.liqPrice).toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                            : '-'
+                          }
+                        </TableCell>
+                      </TableRow>
+                      {/* Expanded Chart Row */}
+                      {isExpanded && (
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell colSpan={7} className="p-0">
+                            <div className="p-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                              <FloatingPositionChart
+                                position={pos}
+                                onClose={() => setExpandedPosition(null)}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </TableBody>
