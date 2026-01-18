@@ -249,23 +249,16 @@ const Auth = () => {
               
               <Button
                 variant="outline"
-                onClick={() => setOtpSent(false)}
+                onClick={() => {
+                  const phoneSection = document.getElementById('phone-section');
+                  if (phoneSection) {
+                    phoneSection.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
                 className={otpSent ? 'hidden' : ''}
-                asChild
               >
-                <div 
-                  className="cursor-pointer flex items-center justify-center"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    const phoneSection = document.getElementById('phone-section');
-                    if (phoneSection) {
-                      phoneSection.scrollIntoView({ behavior: 'smooth' });
-                    }
-                  }}
-                >
-                  <Phone className="mr-2 h-4 w-4" />
-                  Telefone
-                </div>
+                <Phone className="mr-2 h-4 w-4" />
+                Telefone
               </Button>
             </div>
             
