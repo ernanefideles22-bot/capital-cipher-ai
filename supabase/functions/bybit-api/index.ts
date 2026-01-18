@@ -37,29 +37,64 @@ async function generateSignature(params: Record<string, string | number>, timest
   return new TextDecoder().decode(encode(new Uint8Array(signature)));
 }
 
+// Generate signature for Bybit API (POST uses JSON body in signature)
+async function generateSignaturePost(body: string, timestamp: number, recvWindow: number): Promise<string> {
+  const signPayload = `${timestamp}${BYBIT_API_KEY}${recvWindow}${body}`;
+  
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(BYBIT_API_SECRET);
+  const messageData = encoder.encode(signPayload);
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyData,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  
+  const signature = await crypto.subtle.sign("HMAC", cryptoKey, messageData);
+  return new TextDecoder().decode(encode(new Uint8Array(signature)));
+}
+
 // Make authenticated request to Bybit
 async function bybitRequest(endpoint: string, method: string = "GET", params: Record<string, string | number> = {}) {
   const timestamp = Date.now();
   const recvWindow = 5000;
   
-  const signature = await generateSignature(params, timestamp, recvWindow);
-  
-  const queryString = Object.entries(params)
-    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-    .join("&");
-  
-  const url = `${BYBIT_BASE_URL}${endpoint}${queryString ? `?${queryString}` : ""}`;
-  
-  const headers = {
+  const headers: Record<string, string> = {
     "X-BAPI-API-KEY": BYBIT_API_KEY,
-    "X-BAPI-SIGN": signature,
     "X-BAPI-TIMESTAMP": timestamp.toString(),
     "X-BAPI-RECV-WINDOW": recvWindow.toString(),
     "Content-Type": "application/json",
   };
+
+  let url: string;
+  let fetchOptions: RequestInit;
+
+  if (method === "POST") {
+    // POST: body is JSON, signature uses the JSON body
+    const body = JSON.stringify(params);
+    const signature = await generateSignaturePost(body, timestamp, recvWindow);
+    headers["X-BAPI-SIGN"] = signature;
+    url = `${BYBIT_BASE_URL}${endpoint}`;
+    fetchOptions = { method, headers, body };
+  } else {
+    // GET: params in query string, signature uses query string
+    const signature = await generateSignature(params, timestamp, recvWindow);
+    headers["X-BAPI-SIGN"] = signature;
+    const queryString = Object.entries(params)
+      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+      .join("&");
+    url = `${BYBIT_BASE_URL}${endpoint}${queryString ? `?${queryString}` : ""}`;
+    fetchOptions = { method, headers };
+  }
   
-  const response = await fetch(url, { method, headers });
-  return await response.json();
+  console.log(`Bybit API call: ${method} ${endpoint}`);
+  const response = await fetch(url, fetchOptions);
+  const result = await response.json();
+  console.log(`Bybit API response: retCode=${result.retCode}, retMsg=${result.retMsg}`);
+  return result;
 }
 
 // Authenticate user via JWT
