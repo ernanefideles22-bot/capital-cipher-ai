@@ -280,10 +280,11 @@ const Index = () => {
           <Button 
             variant="outline" 
             onClick={() => navigate('/settings')}
-            className="w-full justify-start gap-2 bg-card/50"
+            className="gap-2 bg-card/50"
+            size="sm"
           >
             <Settings className="w-4 h-4" />
-            Configurações do Bot
+            Configurações
           </Button>
         </section>
 

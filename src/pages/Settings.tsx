@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings, Volume2 } from 'lucide-react';
+import { ArrowLeft, Settings2, Volume2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ConfigPanel } from '@/components/trading/ConfigPanel';
 import { BybitConnectionPanel } from '@/components/trading/BybitConnectionPanel';
@@ -29,7 +29,7 @@ const SettingsPage = () => {
               Voltar
             </Button>
             <div className="flex items-center gap-2">
-              <Settings className="w-5 h-5 text-accent" />
+              <Settings2 className="w-5 h-5 text-accent" />
               <h1 className="text-xl font-bold">Configurações</h1>
             </div>
           </div>
@@ -44,7 +44,7 @@ const SettingsPage = () => {
         {/* Bot Configuration */}
         <section>
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Settings className="w-5 h-5 text-muted-foreground" />
+            <Settings2 className="w-5 h-5 text-muted-foreground" />
             Configurações do Bot
           </h2>
           <div className="max-w-xl">
