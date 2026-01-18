@@ -310,7 +310,7 @@ const Index = () => {
               onTradeExecuted={isRealMode ? handleRealTradeExecuted : undefined}
               externalRunning={botStats.status === 'RUNNING'}
               onBotStatusChange={handleBotStatusChange}
-              currentDrawdown={botStats.maxDrawdown}
+              currentDrawdown={botStats.currentDrawdown}
               dailyPnL={botStats.dailyPnL}
             />
             <DrawdownGauge stats={botStats} config={config} />
