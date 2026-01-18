@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Activity, DollarSign, Target, X, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, DollarSign, Target, X, RefreshCw, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { FloatingPositionChart } from './FloatingPositionChart';
+import { useBybitAPI } from '@/hooks/useBybitAPI';
+import { toast } from 'sonner';
 
 interface Position {
   symbol: string;
@@ -97,13 +99,46 @@ interface ActiveTradesWidgetProps {
   positions: Position[];
   className?: string;
   isRefreshing?: boolean;
+  onPositionClosed?: () => void;
 }
 
-export const ActiveTradesWidget = ({ positions, className, isRefreshing }: ActiveTradesWidgetProps) => {
+export const ActiveTradesWidget = ({ positions, className, isRefreshing, onPositionClosed }: ActiveTradesWidgetProps) => {
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
   const [animatingPnl, setAnimatingPnl] = useState<Record<string, 'up' | 'down' | null>>({});
   const [prevPnl, setPrevPnl] = useState<Record<string, number>>({});
+  const [closingSymbol, setClosingSymbol] = useState<string | null>(null);
+  
+  const bybitAPI = useBybitAPI();
 
+  const handleClosePosition = async (e: React.MouseEvent, position: Position) => {
+    e.stopPropagation(); // Prevent card expansion
+    
+    const qty = parseFloat(position.size);
+    const pnl = parseFloat(position.unrealisedPnl);
+    
+    setClosingSymbol(position.symbol);
+    
+    try {
+      const result = await bybitAPI.closePosition(
+        position.symbol, 
+        position.side as 'Buy' | 'Sell', 
+        qty
+      );
+      
+      if (result?.retCode === 0) {
+        toast.success(
+          `${position.symbol} encerrado! P&L: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT`
+        );
+        onPositionClosed?.();
+      } else {
+        toast.error(`Erro ao encerrar ${position.symbol}: ${result?.retMsg || 'Erro desconhecido'}`);
+      }
+    } catch (err: any) {
+      toast.error(`Erro: ${err.message}`);
+    } finally {
+      setClosingSymbol(null);
+    }
+  };
   // Track P&L changes for animations
   useEffect(() => {
     const newAnimations: Record<string, 'up' | 'down' | null> = {};
@@ -243,6 +278,22 @@ export const ActiveTradesWidget = ({ positions, className, isRefreshing }: Activ
                         {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} USDT
                       </span>
                     </div>
+                    
+                    {/* Close Position Button */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => handleClosePosition(e, pos)}
+                      disabled={closingSymbol === pos.symbol}
+                      className="h-6 w-6 p-0 hover:bg-loss/20 hover:text-loss"
+                      title="Encerrar posição"
+                    >
+                      {closingSymbol === pos.symbol ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <X className="w-3.5 h-3.5" />
+                      )}
+                    </Button>
                   </div>
                 </div>
                 

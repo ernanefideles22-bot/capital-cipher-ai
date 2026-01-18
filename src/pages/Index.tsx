@@ -401,7 +401,7 @@ const Index = () => {
             {/* Active Trades Widget - Real-time P&L */}
             {positions.length > 0 && (
               <div className="pt-2 border-t border-profit/20">
-                <ActiveTradesWidget positions={positions} isRefreshing={isRefreshing} />
+                <ActiveTradesWidget positions={positions} isRefreshing={isRefreshing} onPositionClosed={refreshBybit} />
               </div>
             )}
           </div>
