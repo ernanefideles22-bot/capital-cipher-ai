@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { MarketData } from '@/types/trading';
-import { supabase } from '@/integrations/supabase/client';
 
 // Trading pairs to monitor
 const TRADING_PAIRS = [
@@ -31,14 +30,55 @@ interface UseRealtimePricesOptions {
   intervalMs?: number;
 }
 
+export type SparklineData = number[];
+
 export function useRealtimePrices(options: UseRealtimePricesOptions = {}) {
   const { enabled = true, intervalMs = 2000 } = options;
   const [prices, setPrices] = useState<Record<string, MarketData>>({});
+  const [sparklines, setSparklines] = useState<Record<string, SparklineData>>({});
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   const prevPrices = useRef<Record<string, number>>({});
   const [priceAnimations, setPriceAnimations] = useState<Record<string, 'up' | 'down' | null>>({});
+  const sparklinesFetchedRef = useRef(false);
+
+  // Fetch sparkline data (5-minute klines for last hour = 12 candles)
+  const fetchSparklines = useCallback(async () => {
+    try {
+      const sparklineData: Record<string, SparklineData> = {};
+      
+      // Fetch klines for each pair in parallel
+      await Promise.all(
+        TRADING_PAIRS.map(async (symbol) => {
+          try {
+            const response = await fetch(
+              `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=5&limit=20`
+            );
+            
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            
+            if (data.retCode === 0 && data.result?.list) {
+              // Kline format: [startTime, open, high, low, close, volume, turnover]
+              // We want close prices, reversed to be chronological
+              const closes = data.result.list
+                .map((k: string[]) => parseFloat(k[4]))
+                .reverse();
+              sparklineData[symbol] = closes;
+            }
+          } catch (err) {
+            console.error(`Error fetching sparkline for ${symbol}:`, err);
+          }
+        })
+      );
+      
+      setSparklines(sparklineData);
+    } catch (err) {
+      console.error('Error fetching sparklines:', err);
+    }
+  }, []);
 
   const fetchPrices = useCallback(async () => {
     try {
@@ -88,6 +128,16 @@ export function useRealtimePrices(options: UseRealtimePricesOptions = {}) {
             volume24h: parseFloat(ticker.turnover24h),
             timestamp: Date.now(),
           };
+
+          // Update sparkline with latest price
+          setSparklines(prev => {
+            if (prev[symbol] && prev[symbol].length > 0) {
+              const updated = [...prev[symbol]];
+              updated[updated.length - 1] = currentPrice;
+              return { ...prev, [symbol]: updated };
+            }
+            return prev;
+          });
         }
       });
 
@@ -109,7 +159,20 @@ export function useRealtimePrices(options: UseRealtimePricesOptions = {}) {
     }
   }, []);
 
-  // Initial fetch and polling
+  // Initial fetch sparklines once
+  useEffect(() => {
+    if (!enabled || sparklinesFetchedRef.current) return;
+    
+    sparklinesFetchedRef.current = true;
+    fetchSparklines();
+    
+    // Refresh sparklines every 5 minutes
+    const sparklineInterval = setInterval(fetchSparklines, 5 * 60 * 1000);
+    
+    return () => clearInterval(sparklineInterval);
+  }, [enabled, fetchSparklines]);
+
+  // Initial fetch and polling for prices
   useEffect(() => {
     if (!enabled) return;
 
@@ -124,6 +187,7 @@ export function useRealtimePrices(options: UseRealtimePricesOptions = {}) {
 
   return {
     prices,
+    sparklines,
     loading,
     lastUpdate,
     error,

@@ -86,7 +86,7 @@ const Index = () => {
   }, [isRealMode, realData.stats, demoStats, wallet]);
 
   // Real-time prices from Bybit API (updates every 2 seconds)
-  const { prices: realtimePrices, priceAnimations, loading: pricesLoading } = useRealtimePrices({ 
+  const { prices: realtimePrices, sparklines, priceAnimations, loading: pricesLoading } = useRealtimePrices({ 
     enabled: true, 
     intervalMs: 2000 
   });
@@ -393,6 +393,7 @@ const Index = () => {
               isSelected={data.symbol === selectedSymbol}
               onClick={() => setSelectedSymbol(data.symbol)}
               priceAnimation={priceAnimations[data.symbol]}
+              sparklineData={sparklines[data.symbol]}
             />
           ))}
         </section>
