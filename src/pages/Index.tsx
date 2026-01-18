@@ -49,6 +49,7 @@ const Index = () => {
     connectionStatus,
     connectionError,
     reconnect,
+    clearLogs: demoClearLogs,
   } = useTradingData({ isRealMode });
 
   // REAL mode data - from database and Bybit
@@ -329,7 +330,11 @@ const Index = () => {
         {/* Logs + News */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <div className="h-[240px]">
-            <LogsPanel logs={logs} isRealMode={isRealMode} />
+            <LogsPanel 
+              logs={logs} 
+              isRealMode={isRealMode} 
+              onClearLogs={isRealMode ? realData.clearLogs : demoClearLogs}
+            />
           </div>
           <LiveNewsPanel />
         </section>

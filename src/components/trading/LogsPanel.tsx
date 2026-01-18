@@ -1,10 +1,12 @@
-import { Terminal, Info, AlertTriangle, CheckCircle, XCircle, Brain } from 'lucide-react';
+import { Terminal, Info, AlertTriangle, CheckCircle, XCircle, Brain, Trash2 } from 'lucide-react';
 import type { LogEntry } from '@/types/trading';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface LogsPanelProps {
   logs: LogEntry[];
   isRealMode?: boolean;
+  onClearLogs?: () => void;
 }
 
 const levelConfig = {
@@ -15,15 +17,27 @@ const levelConfig = {
   AI: { icon: Brain, color: 'text-primary', bg: 'bg-primary/10' },
 };
 
-export const LogsPanel = ({ logs, isRealMode = false }: LogsPanelProps) => {
+export const LogsPanel = ({ logs, isRealMode = false, onClearLogs }: LogsPanelProps) => {
   return (
     <div className="glass-card h-full flex flex-col">
       <div className="p-4 border-b border-border flex items-center gap-2">
         <Terminal className="w-5 h-5 text-muted-foreground" />
         <h3 className="font-semibold">Logs do Sistema</h3>
-        <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
           {logs.length} entradas
         </span>
+        {onClearLogs && logs.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClearLogs}
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Trash2 className="w-3 h-3 mr-1" />
+            Limpar
+          </Button>
+        )}
+        <span className="ml-auto" />
         {isRealMode ? (
           <span className="text-xs px-2 py-1 rounded bg-profit/10 text-profit border border-profit/30">
             🟢 Real

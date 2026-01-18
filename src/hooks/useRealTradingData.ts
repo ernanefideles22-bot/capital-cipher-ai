@@ -60,6 +60,14 @@ export function useRealTradingData(userId: string | undefined) {
     }));
   }, []);
 
+  // Clear logs
+  const clearLogs = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      logs: [],
+    }));
+  }, []);
+
   // Add an AI decision
   const addAIDecision = useCallback((decision: Omit<AIDecision, 'id' | 'timestamp'>) => {
     const entry: AIDecision = {
@@ -273,5 +281,6 @@ export function useRealTradingData(userId: string | undefined) {
     setBotStatus,
     loadTrades,
     clearData,
+    clearLogs,
   };
 }
