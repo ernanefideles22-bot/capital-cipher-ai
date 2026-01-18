@@ -70,8 +70,38 @@ interface TradingRules {
   reserveCapitalPercent: number; // % of capital to keep as reserve
 }
 
+// Technical indicators interface for edge function
+export interface TechnicalIndicatorsPayload {
+  rsi: number;
+  rsiSignal: string;
+  macd: number;
+  macdSignal: number;
+  macdHistogram: number;
+  macdTrend: string;
+  bollingerUpper: number;
+  bollingerMiddle: number;
+  bollingerLower: number;
+  bollingerPosition: string;
+  bollingerWidth: number;
+  ema9: number;
+  ema21: number;
+  ema50: number;
+  emaTrend: string;
+  volumeRatio: number;
+  volumeSignal: string;
+  atr: number;
+  atrPercent: number;
+  momentum: number;
+  momentumSignal: string;
+  nearestSupport: number;
+  nearestResistance: number;
+  overallSignal: string;
+  signalStrength: number;
+}
+
 interface UseAutonomousBotOptions {
   marketData: Record<string, MarketData>;
+  technicalIndicators?: Record<string, TechnicalIndicatorsPayload>;
   onTradeOpened?: (trade: Trade) => void;
   onDecisionMade?: (decision: AIDecision) => void;
   onLog?: (log: LogEntry) => void;
@@ -82,8 +112,8 @@ interface UseAutonomousBotOptions {
   dailyPnL?: number;
   accountBalance?: number;
   tradingRules?: Partial<TradingRules>;
-  sendRealOrders?: boolean; // NEW: Enable real Bybit order execution
-  leverage?: number; // Leverage for real orders
+  sendRealOrders?: boolean;
+  leverage?: number;
 }
 
 const DEFAULT_RULES: TradingRules = {
@@ -102,6 +132,7 @@ const DEFAULT_RULES: TradingRules = {
 
 export const useAutonomousBot = ({
   marketData,
+  technicalIndicators,
   onTradeOpened,
   onDecisionMade,
   onLog,
@@ -278,10 +309,45 @@ export const useAutonomousBot = ({
         }
       });
 
+      // Prepare technical indicators for API
+      const indicatorsData: Record<string, any> = {};
+      if (technicalIndicators) {
+        Object.entries(technicalIndicators).forEach(([symbol, ind]) => {
+          indicatorsData[symbol] = {
+            rsi: ind.rsi,
+            rsiSignal: ind.rsiSignal,
+            macd: ind.macd,
+            macdSignal: ind.macdSignal,
+            macdHistogram: ind.macdHistogram,
+            macdTrend: ind.macdTrend,
+            bollingerUpper: ind.bollingerUpper,
+            bollingerMiddle: ind.bollingerMiddle,
+            bollingerLower: ind.bollingerLower,
+            bollingerPosition: ind.bollingerPosition,
+            bollingerWidth: ind.bollingerWidth,
+            ema9: ind.ema9,
+            ema21: ind.ema21,
+            ema50: ind.ema50,
+            emaTrend: ind.emaTrend,
+            volumeRatio: ind.volumeRatio,
+            volumeSignal: ind.volumeSignal,
+            atr: ind.atr,
+            atrPercent: ind.atrPercent,
+            momentum: ind.momentum,
+            momentumSignal: ind.momentumSignal,
+            nearestSupport: ind.nearestSupport,
+            nearestResistance: ind.nearestResistance,
+            overallSignal: ind.overallSignal,
+            signalStrength: ind.signalStrength,
+          };
+        });
+      }
+
       const { data, error: fnError } = await supabase.functions.invoke('multi-pair-analysis', {
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: {
           marketData: preparedData,
+          technicalIndicators: indicatorsData,
           maxResults: 5,
         },
       });
