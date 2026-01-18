@@ -179,6 +179,43 @@ export function useBybitAPI() {
     [callBybitAPI]
   );
 
+  const closePosition = useCallback(
+    async (symbol: string, side: 'Buy' | 'Sell', qty: number) => {
+      // To close a position, we place an opposite market order
+      const closeSide = side === 'Buy' ? 'Sell' : 'Buy';
+      return callBybitAPI('placeOrder', {
+        symbol,
+        side: closeSide,
+        qty,
+        orderType: 'Market',
+        reduceOnly: true,
+      });
+    },
+    [callBybitAPI]
+  );
+
+  const closeAllPositions = useCallback(async (): Promise<{ success: number; failed: number; errors: string[] }> => {
+    const positions = await getPositions();
+    let success = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const pos of positions) {
+      const qty = parseFloat(pos.size);
+      if (qty > 0) {
+        const result = await closePosition(pos.symbol, pos.side, qty);
+        if (result?.retCode === 0) {
+          success++;
+        } else {
+          failed++;
+          errors.push(`${pos.symbol}: ${result?.retMsg || 'Unknown error'}`);
+        }
+      }
+    }
+
+    return { success, failed, errors };
+  }, [getPositions, closePosition]);
+
   const getKlines = useCallback(
     async (symbol: string, interval: string = '15', limit: number = 200) => {
       const result = await callBybitAPI('getKline', { symbol, interval, limit });
@@ -201,6 +238,8 @@ export function useBybitAPI() {
     placeOrder,
     cancelOrder,
     setLeverage,
+    closePosition,
+    closeAllPositions,
     getKlines,
   };
 }
