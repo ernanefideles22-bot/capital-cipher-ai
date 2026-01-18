@@ -273,23 +273,31 @@ const generateAIDecision = (): AIDecision => {
   };
 };
 
-export const useTradingData = () => {
+// Empty stats for real mode (will come from actual trades)
+const emptyStats: BotStats = {
+  status: 'PAUSED',
+  totalTrades: 0,
+  winRate: 0,
+  totalPnL: 0,
+  dailyPnL: 0,
+  weeklyPnL: 0,
+  monthlyPnL: 0,
+  currentDrawdown: 0,
+  maxDrawdown: 10,
+  sharpeRatio: 0,
+  profitFactor: 0,
+};
+
+interface UseTradingDataOptions {
+  isRealMode?: boolean;
+}
+
+export const useTradingData = (options: UseTradingDataOptions = {}) => {
+  const { isRealMode = false } = options;
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [marketData, setMarketData] = useState<Record<string, MarketData>>({});
-  const [botStats, setBotStats] = useState<BotStats>({
-    status: 'PAUSED',
-    totalTrades: 0,
-    winRate: 0,
-    totalPnL: 0,
-    dailyPnL: 0,
-    weeklyPnL: 0,
-    monthlyPnL: 0,
-    currentDrawdown: 0,
-    maxDrawdown: 10,
-    sharpeRatio: 0,
-    profitFactor: 0,
-  });
+  const [botStats, setBotStats] = useState<BotStats>({ ...emptyStats });
   const [trades, setTrades] = useState<Trade[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [aiDecisions, setAIDecisions] = useState<AIDecision[]>([]);
@@ -304,6 +312,7 @@ export const useTradingData = () => {
   });
 
   const simulationRef = useRef<NodeJS.Timeout | null>(null);
+  const prevModeRef = useRef<boolean>(isRealMode);
 
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
     const { type, data } = message;
@@ -651,9 +660,47 @@ export const useTradingData = () => {
     }, 1500);
   }, []);
 
-  // Start simulation on mount if not connected
+  // Stop simulation when switching to real mode
+  const stopSimulation = useCallback(() => {
+    if (simulationRef.current) {
+      clearInterval(simulationRef.current);
+      simulationRef.current = null;
+    }
+  }, []);
+
+  // Clear all simulated data when switching to real mode
+  const clearSimulatedData = useCallback(() => {
+    stopSimulation();
+    openPositions = [];
+    totalPnL = 0;
+    dailyPnL = 0;
+    totalTradesCount = 0;
+    winCount = 0;
+    
+    setTrades([]);
+    setLogs([generateLogEntry({ level: 'INFO', message: '🔄 Modo REAL ativado - Apenas dados reais da Bybit' })]);
+    setAIDecisions([]);
+    setBotStats({ ...emptyStats, status: 'PAUSED' });
+  }, [stopSimulation]);
+
+  // Handle mode changes
   useEffect(() => {
-    if (status === 'disconnected' || status === 'error') {
+    if (prevModeRef.current !== isRealMode) {
+      prevModeRef.current = isRealMode;
+      
+      if (isRealMode) {
+        // Switching to real mode - clear all simulated data
+        clearSimulatedData();
+      } else {
+        // Switching to demo mode - start simulation
+        startSimulation();
+      }
+    }
+  }, [isRealMode, clearSimulatedData, startSimulation]);
+
+  // Start simulation on mount if not connected and in demo mode
+  useEffect(() => {
+    if (!isRealMode && (status === 'disconnected' || status === 'error')) {
       startSimulation();
     }
     
@@ -662,7 +709,7 @@ export const useTradingData = () => {
         clearInterval(simulationRef.current);
       }
     };
-  }, [status, startSimulation]);
+  }, [status, startSimulation, isRealMode]);
 
   const toggleBotStatus = useCallback(() => {
     const newStatus = botStats.status === 'RUNNING' ? 'PAUSED' : 'RUNNING';

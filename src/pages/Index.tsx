@@ -20,6 +20,7 @@ import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useVoiceAlerts } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
 import { useTradesDB } from '@/hooks/useTradesDB';
+import { useBybitAccount } from '@/hooks/useBybitAccount';
 import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -31,6 +32,9 @@ const Index = () => {
   const { user, signOut } = useAuth();
   const { saveTrade, loadTrades, updateBotStats } = useTradesDB(user?.id);
   const [dbTradesLoaded, setDbTradesLoaded] = useState(false);
+  
+  // Get mode from Bybit account hook
+  const { isRealMode, wallet, positions } = useBybitAccount();
   
   const { 
     marketData, 
@@ -45,7 +49,7 @@ const Index = () => {
     connectionStatus,
     connectionError,
     reconnect,
-  } = useTradingData();
+  } = useTradingData({ isRealMode });
 
   // Load trades from database on mount
   useEffect(() => {
@@ -146,7 +150,7 @@ const Index = () => {
 
         {/* Stats Grid */}
         <section>
-          <StatsGrid stats={botStats} />
+          <StatsGrid stats={botStats} isRealMode={isRealMode} walletBalance={wallet?.totalEquity} />
         </section>
 
         {/* Chart + Right Panel */}
@@ -206,7 +210,7 @@ const Index = () => {
         {/* Footer */}
         <footer className="text-center py-3 text-xs text-muted-foreground border-t border-border/50">
           <p className="text-xs opacity-70">
-            {user?.email} • {isConnected ? '🟢 Conectado' : '🟡 Demo'}
+            {user?.email} • {isRealMode ? '🟢 Conta Real' : '🟡 Modo Demo'}
           </p>
         </footer>
       </main>
