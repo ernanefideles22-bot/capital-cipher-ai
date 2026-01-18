@@ -435,22 +435,45 @@ export const useAutonomousBot = ({
     // Calculate quantity based on capital and price
     let quantity = opportunity.entryPrice > 0 ? capitalToUse / opportunity.entryPrice : 0;
 
+    // Minimum quantity requirements per symbol (Bybit linear perpetuals)
+    const minQtyBySymbol: Record<string, number> = {
+      'BTCUSDT': 0.001,
+      'ETHUSDT': 0.01,
+      'BNBUSDT': 0.01,
+      'SOLUSDT': 0.1,
+      'XRPUSDT': 1,
+      'ADAUSDT': 1,
+      'DOGEUSDT': 1,
+      'DOTUSDT': 0.1,
+      'MATICUSDT': 1,
+      'LINKUSDT': 0.1,
+      'AVAXUSDT': 0.1,
+    };
+    
+    const minQtyForSymbol = minQtyBySymbol[opportunity.symbol] || 0.001;
+
     // Bybit typically enforces a minimum notional (ex: 5 USDT)
     const minNotionalUSDT = 5;
     const minQtyForNotional = opportunity.entryPrice > 0 ? minNotionalUSDT / opportunity.entryPrice : 0;
+    
+    // Use the larger of the two minimums
+    const effectiveMinQty = Math.max(minQtyForSymbol, minQtyForNotional);
 
-    if (quantity < minQtyForNotional) {
-      const valueAtMinQty = minQtyForNotional * opportunity.entryPrice;
-      if (valueAtMinQty > capitalToUse * 1.5) {
+    if (quantity < effectiveMinQty) {
+      const valueAtMinQty = effectiveMinQty * opportunity.entryPrice;
+      if (valueAtMinQty > capitalToUse * 2) {
         // Allow some flexibility but not too much
-        addLog('WARN', `⚠️ ${opportunity.symbol}: Capital insuficiente ($${capitalToUse.toFixed(2)}) para mínimo de ${minNotionalUSDT} USDT`);
+        addLog('WARN', `⚠️ ${opportunity.symbol}: Capital insuficiente ($${capitalToUse.toFixed(2)}) para mínimo de ${effectiveMinQty} contratos (~$${valueAtMinQty.toFixed(2)})`);
         return null;
       }
-      quantity = minQtyForNotional;
+      quantity = effectiveMinQty;
+      addLog('INFO', `${opportunity.symbol}: Ajustando para quantidade mínima ${effectiveMinQty}`);
     }
 
-    // Avoid scientific notation and overly long floats
-    quantity = parseFloat(quantity.toFixed(6));
+    // Round to appropriate decimal places based on symbol
+    const qtyDecimals = opportunity.symbol === 'BTCUSDT' ? 3 : 
+                        ['ETHUSDT', 'BNBUSDT'].includes(opportunity.symbol) ? 2 : 1;
+    quantity = parseFloat(quantity.toFixed(qtyDecimals));
 
     // Validate TP/SL direction (avoid Bybit rejection). If invalid, omit the field.
     const slValid = isLong ? opportunity.stopLoss < opportunity.entryPrice : opportunity.stopLoss > opportunity.entryPrice;
