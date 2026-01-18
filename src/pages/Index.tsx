@@ -20,7 +20,7 @@ import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useVoiceAlerts } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
 import { useTradesDB } from '@/hooks/useTradesDB';
-import { Volume2, VolumeX, LogOut, BarChart3 } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -130,6 +130,10 @@ const Index = () => {
             onReconnect={reconnect}
           />
         }
+        voiceEnabled={voiceEnabled}
+        onToggleVoice={() => setVoiceEnabled(!voiceEnabled)}
+        onSignOut={handleSignOut}
+        userEmail={user?.email}
       />
       
       <main className="px-3 md:px-4 lg:px-6 py-3 space-y-3 max-w-[1600px] mx-auto">
@@ -201,35 +205,6 @@ const Index = () => {
 
         {/* Footer */}
         <footer className="text-center py-3 text-xs text-muted-foreground border-t border-border/50">
-          <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => navigate('/performance')}
-              className="gap-1.5 h-8 text-xs"
-            >
-              <BarChart3 className="h-3.5 w-3.5" />
-              Performance
-            </Button>
-            <Button
-              variant={voiceEnabled ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setVoiceEnabled(!voiceEnabled)}
-              className="gap-1.5 h-8 text-xs"
-            >
-              {voiceEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-              {voiceEnabled ? 'Voz ON' : 'Voz OFF'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSignOut}
-              className="gap-1.5 h-8 text-xs"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Sair
-            </Button>
-          </div>
           <p className="text-xs opacity-70">
             {user?.email} • {isConnected ? '🟢 Conectado' : '🟡 Demo'}
           </p>
