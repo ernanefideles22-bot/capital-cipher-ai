@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 
 interface AIDecisionsPanelProps {
   decisions: AIDecision[];
+  isRealMode?: boolean;
 }
 
 const actionIcons = {
@@ -23,7 +24,7 @@ const actionColors = {
   SKIP: 'text-muted-foreground',
 };
 
-export const AIDecisionsPanel = ({ decisions }: AIDecisionsPanelProps) => {
+export const AIDecisionsPanel = ({ decisions, isRealMode = false }: AIDecisionsPanelProps) => {
   const { sentiment } = useNewsSentiment();
   
   // Check if decision reasoning mentions news sentiment
@@ -69,6 +70,15 @@ export const AIDecisionsPanel = ({ decisions }: AIDecisionsPanelProps) => {
             <Brain className="w-5 h-5 text-primary" />
             <h3 className="font-semibold">Decisões da IA</h3>
           </div>
+          {isRealMode ? (
+            <span className="text-xs px-2 py-1 rounded bg-profit/10 text-profit border border-profit/30">
+              🟢 Real
+            </span>
+          ) : (
+            <span className="text-xs px-2 py-1 rounded bg-warning/10 text-warning border border-warning/30">
+              🟡 Demo
+            </span>
+          )}
         </div>
         
         {/* Current News Sentiment Indicator */}

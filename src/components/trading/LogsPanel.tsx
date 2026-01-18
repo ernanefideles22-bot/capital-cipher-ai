@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 
 interface LogsPanelProps {
   logs: LogEntry[];
+  isRealMode?: boolean;
 }
 
 const levelConfig = {
@@ -14,7 +15,7 @@ const levelConfig = {
   AI: { icon: Brain, color: 'text-primary', bg: 'bg-primary/10' },
 };
 
-export const LogsPanel = ({ logs }: LogsPanelProps) => {
+export const LogsPanel = ({ logs, isRealMode = false }: LogsPanelProps) => {
   return (
     <div className="glass-card h-full flex flex-col">
       <div className="p-4 border-b border-border flex items-center gap-2">
@@ -23,6 +24,15 @@ export const LogsPanel = ({ logs }: LogsPanelProps) => {
         <span className="ml-auto text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
           {logs.length} entradas
         </span>
+        {isRealMode ? (
+          <span className="text-xs px-2 py-1 rounded bg-profit/10 text-profit border border-profit/30">
+            🟢 Real
+          </span>
+        ) : (
+          <span className="text-xs px-2 py-1 rounded bg-warning/10 text-warning border border-warning/30">
+            🟡 Demo
+          </span>
+        )}
       </div>
       
       <div className="flex-1 overflow-y-auto scrollbar-thin p-2 terminal-log">

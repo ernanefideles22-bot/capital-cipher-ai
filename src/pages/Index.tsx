@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Header } from '@/components/trading/Header';
 import { PriceCard } from '@/components/trading/PriceCard';
 import { StatsGrid } from '@/components/trading/StatsGrid';
@@ -16,33 +16,33 @@ import { TradingAIPanel } from '@/components/trading/TradingAIPanel';
 import { LiveNewsPanel } from '@/components/trading/LiveNewsPanel';
 import { AIMarketAnalysis } from '@/components/trading/AIMarketAnalysis';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
+import { useRealTradingData } from '@/hooks/useRealTradingData';
 import { useVoiceAlerts } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
-import { useTradesDB } from '@/hooks/useTradesDB';
 import { useBybitAccount } from '@/hooks/useBybitAccount';
 import type { TradeResult } from '@/hooks/useTradingAI';
-import type { Trade } from '@/types/trading';
+import type { Trade, BotStats } from '@/types/trading';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { AlertCircle } from 'lucide-react';
 
 const Index = () => {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const { announceTradeOpened, announceTradeClosed } = useVoiceAlerts({ enabled: voiceEnabled });
   const { user, signOut } = useAuth();
-  const { saveTrade, loadTrades, updateBotStats } = useTradesDB(user?.id);
-  const [dbTradesLoaded, setDbTradesLoaded] = useState(false);
-  const [realTrades, setRealTrades] = useState<Trade[]>([]);
   
   // Get mode from Bybit account hook
-  const { isRealMode, wallet, positions } = useBybitAccount();
+  const { isRealMode, wallet, positions, refreshData: refreshBybit, loading: bybitLoading } = useBybitAccount();
   
+  // DEMO mode data - simulated
   const { 
-    marketData, 
-    botStats, 
-    trades: simulatedTrades, 
-    logs, 
-    aiDecisions, 
+    marketData: demoMarketData, 
+    botStats: demoStats, 
+    trades: demoTrades, 
+    logs: demoLogs, 
+    aiDecisions: demoDecisions, 
     config,
-    toggleBotStatus,
+    toggleBotStatus: demoToggleBot,
     updateConfig,
     isConnected,
     connectionStatus,
@@ -50,25 +50,40 @@ const Index = () => {
     reconnect,
   } = useTradingData({ isRealMode });
 
-  // Use real trades when in real mode, simulated when in demo
-  const trades = isRealMode ? realTrades : simulatedTrades;
+  // REAL mode data - from database and Bybit
+  const realData = useRealTradingData(user?.id);
 
-  // Load trades from database on mount (only real trades)
-  useEffect(() => {
-    if (user && !dbTradesLoaded) {
-      loadTrades().then(({ data, error }) => {
-        if (error) {
-          console.error('Error loading trades:', error);
-        } else if (data) {
-          setRealTrades(data);
-          if (data.length > 0) {
-            toast.success(`${data.length} trades carregados do histórico`);
-          }
-        }
-        setDbTradesLoaded(true);
-      });
+  // Memoized data selection based on mode
+  const trades = useMemo(() => isRealMode ? realData.trades : demoTrades, [isRealMode, realData.trades, demoTrades]);
+  const logs = useMemo(() => isRealMode ? realData.logs : demoLogs, [isRealMode, realData.logs, demoLogs]);
+  const aiDecisions = useMemo(() => isRealMode ? realData.aiDecisions : demoDecisions, [isRealMode, realData.aiDecisions, demoDecisions]);
+  
+  // Stats - combine wallet data with real trade stats when in real mode
+  const botStats = useMemo((): BotStats => {
+    if (isRealMode) {
+      return {
+        ...realData.stats,
+        totalPnL: wallet?.totalPnL ?? realData.stats.totalPnL,
+      };
     }
-  }, [user, dbTradesLoaded, loadTrades]);
+    return demoStats;
+  }, [isRealMode, realData.stats, demoStats, wallet]);
+
+  // Market data - use demo data for now (could integrate Bybit API later)
+  const marketData = useMemo(() => {
+    // Always use market data from the simulation for now
+    // Real mode could fetch from Bybit API if needed
+    return demoMarketData;
+  }, [demoMarketData]);
+
+  // Toggle bot status based on mode
+  const toggleBotStatus = useCallback(() => {
+    if (isRealMode) {
+      realData.setBotStatus(botStats.status === 'RUNNING' ? 'PAUSED' : 'RUNNING');
+    } else {
+      demoToggleBot();
+    }
+  }, [isRealMode, realData, botStats.status, demoToggleBot]);
 
   // Callback to save real trades when executed via Trading AI
   const handleRealTradeExecuted = useCallback(async (tradeResult: TradeResult) => {
@@ -83,49 +98,44 @@ const Index = () => {
       id: tradeResult.orderId || crypto.randomUUID(),
       symbol: details.symbol,
       side: details.side === 'Buy' ? 'LONG' : 'SHORT',
-      strategy: 'SCALP', // Default strategy for AI trades
+      strategy: 'SCALP',
       entryPrice: details.entry,
       quantity: details.qty,
-      leverage: 10, // Default leverage from config
+      leverage: config.leverage,
       stopLoss: details.stopLoss || undefined,
       takeProfit: details.takeProfit || undefined,
       status: 'OPEN',
       openedAt: new Date(),
     };
 
+    // Add AI decision
+    realData.addAIDecision({
+      symbol: trade.symbol,
+      action: trade.side === 'LONG' ? 'BUY' : 'SELL',
+      confidence: 75,
+      reasoning: `Trade executado via IA: ${trade.side} @ $${trade.entryPrice.toFixed(2)}`,
+      indicators: {
+        institutionalFlow: 0,
+        volumeCluster: false,
+        trendStrength: 0,
+        riskScore: 0,
+      },
+    });
+
     // Save to database
-    const { data, error } = await saveTrade(trade, undefined, 'AI Auto-Trade');
+    const { error } = await realData.addTrade(trade, 75, 'AI Auto-Trade');
     
     if (error) {
-      console.error('Error saving real trade:', error);
       toast.error('Erro ao salvar trade no banco de dados');
     } else {
-      // Add to local state
-      setRealTrades(prev => [trade, ...prev]);
-      toast.success(`Trade real salvo: ${trade.side} ${trade.symbol}`);
+      toast.success(`Trade real executado: ${trade.side} ${trade.symbol}`);
+      
+      // Refresh Bybit data
+      refreshBybit();
     }
-  }, [isRealMode, user, saveTrade]);
+  }, [isRealMode, user, realData, config.leverage, refreshBybit]);
 
-  // Update bot stats in database periodically
-  useEffect(() => {
-    if (!user) return;
-    
-    const interval = setInterval(() => {
-      updateBotStats({
-        totalTrades: botStats.totalTrades,
-        winCount: Math.round(botStats.totalTrades * (botStats.winRate / 100)),
-        totalPnl: botStats.totalPnL,
-        dailyPnl: botStats.dailyPnL,
-        weeklyPnl: botStats.weeklyPnL,
-        monthlyPnl: botStats.monthlyPnL,
-        maxDrawdown: botStats.maxDrawdown,
-      }).catch(console.error);
-    }, 30000); // Update every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [user, botStats, updateBotStats]);
-
-  // Set up voice alert callbacks
+  // Voice alert callbacks
   useEffect(() => {
     setVoiceAlertCallbacks({
       onTradeOpened: (symbol, side, confidence) => {
@@ -141,6 +151,14 @@ const Index = () => {
     });
   }, [voiceEnabled, announceTradeOpened, announceTradeClosed]);
 
+  // Reload real trades when switching to real mode
+  useEffect(() => {
+    if (isRealMode && user) {
+      realData.loadTrades();
+      refreshBybit();
+    }
+  }, [isRealMode, user]);
+
   const handleSignOut = async () => {
     await signOut();
     toast.success('Logout realizado com sucesso');
@@ -155,9 +173,9 @@ const Index = () => {
         connectionStatus={
           <ConnectionStatus 
             status={connectionStatus}
-            isConnected={isConnected}
+            isConnected={isRealMode ? !!wallet : isConnected}
             error={connectionError}
-            onReconnect={reconnect}
+            onReconnect={isRealMode ? refreshBybit : reconnect}
           />
         }
         voiceEnabled={voiceEnabled}
@@ -167,6 +185,35 @@ const Index = () => {
       />
       
       <main className="px-3 md:px-4 lg:px-6 py-3 space-y-3 max-w-[1600px] mx-auto">
+        {/* Mode Indicator Banner */}
+        {isRealMode && (
+          <div className="bg-profit/10 border border-profit/30 rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-profit" />
+              <span className="text-sm font-medium text-profit">
+                Modo Conta Real - Operações reais na Bybit
+              </span>
+            </div>
+            <Badge variant="outline" className="border-profit text-profit">
+              Saldo: ${wallet?.totalEquity.toLocaleString('en-US', { maximumFractionDigits: 2 }) ?? '--'}
+            </Badge>
+          </div>
+        )}
+
+        {!isRealMode && (
+          <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-warning" />
+              <span className="text-sm font-medium text-warning">
+                Modo Demo - Dados simulados para teste
+              </span>
+            </div>
+            <Badge variant="outline" className="border-warning text-warning">
+              Simulação
+            </Badge>
+          </div>
+        )}
+
         {/* Price Tickers */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {Object.values(marketData).map((data) => (
@@ -201,7 +248,7 @@ const Index = () => {
           {/* Left Column - AI Learning & Trades */}
           <div className="lg:col-span-2 space-y-3">
             <AILearningPanel />
-            <TradesTable trades={trades} />
+            <TradesTable trades={trades} isRealMode={isRealMode} />
           </div>
 
           {/* Right Column - AI Analysis, Decisions, Config */}
@@ -219,7 +266,7 @@ const Index = () => {
               }
             />
             <div className="h-[240px]">
-              <AIDecisionsPanel decisions={aiDecisions} />
+              <AIDecisionsPanel decisions={aiDecisions} isRealMode={isRealMode} />
             </div>
             <ConfigPanel config={config} onUpdateConfig={updateConfig} />
           </div>
@@ -228,7 +275,7 @@ const Index = () => {
         {/* Logs + News */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <div className="h-[240px]">
-            <LogsPanel logs={logs} />
+            <LogsPanel logs={logs} isRealMode={isRealMode} />
           </div>
           <LiveNewsPanel />
         </section>
@@ -236,7 +283,7 @@ const Index = () => {
         {/* Footer */}
         <footer className="text-center py-3 text-xs text-muted-foreground border-t border-border/50">
           <p className="text-xs opacity-70">
-            {user?.email} • {isRealMode ? '🟢 Conta Real' : '🟡 Modo Demo'}
+            {user?.email} • {isRealMode ? '🟢 Conta Real (Bybit)' : '🟡 Modo Demo (Simulação)'}
           </p>
         </footer>
       </main>
