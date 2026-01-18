@@ -43,15 +43,43 @@ async function bybitRequest(endpoint: string, method: string = "GET", params: Re
   const timestamp = Date.now();
   const recvWindow = 5000;
   
-  const signature = await generateSignature(params, timestamp, recvWindow);
+  let url: string;
+  let body: string | undefined;
+  let signPayload: string;
   
-  const queryString = Object.entries(params)
-    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-    .join("&");
+  if (method === "POST") {
+    // For POST requests, body is JSON and signature includes body
+    const jsonBody = JSON.stringify(params);
+    signPayload = `${timestamp}${BYBIT_API_KEY}${recvWindow}${jsonBody}`;
+    url = `${BYBIT_BASE_URL}${endpoint}`;
+    body = jsonBody;
+  } else {
+    // For GET requests, params go in query string
+    const queryString = Object.entries(params)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${value}`)
+      .join("&");
+    signPayload = `${timestamp}${BYBIT_API_KEY}${recvWindow}${queryString}`;
+    url = `${BYBIT_BASE_URL}${endpoint}${queryString ? `?${queryString}` : ""}`;
+  }
   
-  const url = `${BYBIT_BASE_URL}${endpoint}${queryString ? `?${queryString}` : ""}`;
+  // Generate signature
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(BYBIT_API_SECRET);
+  const messageData = encoder.encode(signPayload);
   
-  const headers = {
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyData,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  
+  const signatureBuffer = await crypto.subtle.sign("HMAC", cryptoKey, messageData);
+  const signature = new TextDecoder().decode(encode(new Uint8Array(signatureBuffer)));
+  
+  const headers: Record<string, string> = {
     "X-BAPI-API-KEY": BYBIT_API_KEY,
     "X-BAPI-SIGN": signature,
     "X-BAPI-TIMESTAMP": timestamp.toString(),
@@ -59,8 +87,17 @@ async function bybitRequest(endpoint: string, method: string = "GET", params: Re
     "Content-Type": "application/json",
   };
   
-  const response = await fetch(url, { method, headers });
-  return await response.json();
+  console.log(`Bybit ${method} ${endpoint}`, method === "POST" ? body : params);
+  
+  const response = await fetch(url, { 
+    method, 
+    headers,
+    ...(body ? { body } : {}),
+  });
+  
+  const result = await response.json();
+  console.log(`Bybit response:`, result);
+  return result;
 }
 
 // Fetch market data from Bybit
