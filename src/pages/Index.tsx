@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/trading/Header';
 import { PriceCard } from '@/components/trading/PriceCard';
 import { StatsGrid } from '@/components/trading/StatsGrid';
@@ -9,9 +10,7 @@ import { TradingViewChart } from '@/components/trading/TradingViewChart';
 import { AILearningPanel } from '@/components/trading/AILearningPanel';
 import { AIMemoryPanel } from '@/components/trading/AIMemoryPanel';
 import { DrawdownGauge } from '@/components/trading/DrawdownGauge';
-import { ConfigPanel } from '@/components/trading/ConfigPanel';
 import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
-import { BybitConnectionPanel } from '@/components/trading/BybitConnectionPanel';
 import { TradingAIPanel } from '@/components/trading/TradingAIPanel';
 import { LiveNewsPanel } from '@/components/trading/LiveNewsPanel';
 import { AIMarketAnalysis } from '@/components/trading/AIMarketAnalysis';
@@ -24,9 +23,11 @@ import type { TradeResult } from '@/hooks/useTradingAI';
 import type { Trade, BotStats } from '@/types/trading';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { AlertCircle, Settings } from 'lucide-react';
 
 const Index = () => {
+  const navigate = useNavigate();
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const { announceTradeOpened, announceTradeClosed } = useVoiceAlerts({ enabled: voiceEnabled });
   const { user, signOut } = useAuth();
@@ -214,9 +215,16 @@ const Index = () => {
           </div>
         )}
 
-        {/* Config Panel - Top */}
+        {/* Settings Button - Top */}
         <section>
-          <ConfigPanel config={config} onUpdateConfig={updateConfig} />
+          <Button 
+            variant="outline" 
+            onClick={() => navigate('/settings')}
+            className="w-full justify-start gap-2 bg-card/50"
+          >
+            <Settings className="w-4 h-4" />
+            Configurações do Bot
+          </Button>
         </section>
 
         {/* Price Tickers */}
@@ -239,7 +247,6 @@ const Index = () => {
           <div className="space-y-3">
             <TradingAIPanel onTradeExecuted={isRealMode ? handleRealTradeExecuted : undefined} />
             <DrawdownGauge stats={botStats} config={config} />
-            <BybitConnectionPanel />
           </div>
         </section>
 
