@@ -15,6 +15,7 @@ import { TradingAIPanel } from '@/components/trading/TradingAIPanel';
 import { LiveNewsPanel } from '@/components/trading/LiveNewsPanel';
 import { AIMarketAnalysis } from '@/components/trading/AIMarketAnalysis';
 import { BybitPositionsPanel } from '@/components/trading/BybitPositionsPanel';
+import { BybitOrdersPanel } from '@/components/trading/BybitOrdersPanel';
 import { BotOpportunitiesPanel } from '@/components/trading/BotOpportunitiesPanel';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useRealTradingData } from '@/hooks/useRealTradingData';
@@ -448,14 +449,15 @@ const Index = () => {
           </div>
         </section>
 
-        {/* Logs + News */}
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Logs + News + Bybit Orders */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <LogsPanel 
             logs={logs} 
             isRealMode={isRealMode} 
             onClearLogs={isRealMode ? realData.clearLogs : demoClearLogs}
           />
           <LiveNewsPanel />
+          <BybitOrdersPanel isConnected={isRealMode && !!wallet} />
         </section>
 
         {/* Footer */}

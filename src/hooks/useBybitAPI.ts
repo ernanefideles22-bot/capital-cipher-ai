@@ -37,6 +37,23 @@ interface ClosedTrade {
   updatedTime: string;
 }
 
+interface OrderHistory {
+  orderId: string;
+  symbol: string;
+  side: string;
+  orderType: string;
+  qty: string;
+  price: string;
+  avgPrice: string;
+  orderStatus: string;
+  createdTime: string;
+  updatedTime: string;
+  takeProfit: string;
+  stopLoss: string;
+  cumExecQty: string;
+  cumExecValue: string;
+}
+
 export function useBybitAPI() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +122,16 @@ export function useBybitAPI() {
     return result?.result?.list || [];
   }, [callBybitAPI]);
 
+  const getOrderHistory = useCallback(async (limit: number = 50): Promise<OrderHistory[]> => {
+    const result = await callBybitAPI('getOrderHistory', { limit });
+    return result?.result?.list || [];
+  }, [callBybitAPI]);
+
+  const getActiveOrders = useCallback(async (): Promise<OrderHistory[]> => {
+    const result = await callBybitAPI('getOrders');
+    return result?.result?.list || [];
+  }, [callBybitAPI]);
+
   const placeOrder = useCallback(async (
     symbol: string,
     side: 'Buy' | 'Sell',
@@ -146,6 +173,8 @@ export function useBybitAPI() {
     getTicker,
     getPositions,
     getClosedPnL,
+    getOrderHistory,
+    getActiveOrders,
     placeOrder,
     cancelOrder,
     setLeverage,
