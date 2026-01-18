@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { MarketData, Trade, AIDecision, LogEntry } from '@/types/trading';
+import { useBybitAPI } from '@/hooks/useBybitAPI';
 
 export interface BotOpportunity {
   symbol: string;
@@ -50,6 +51,8 @@ interface UseAutonomousBotOptions {
   dailyPnL?: number;
   accountBalance?: number;
   tradingRules?: Partial<TradingRules>;
+  sendRealOrders?: boolean; // NEW: Enable real Bybit order execution
+  leverage?: number; // Leverage for real orders
 }
 
 const DEFAULT_RULES: TradingRules = {
@@ -74,6 +77,8 @@ export const useAutonomousBot = ({
   dailyPnL = 0,
   accountBalance = 10000,
   tradingRules = {},
+  sendRealOrders = false,
+  leverage = 5,
 }: UseAutonomousBotOptions) => {
   const rules: TradingRules = { ...DEFAULT_RULES, ...tradingRules, minConfidence, maxConcurrentTrades };
   const [isRunning, setIsRunning] = useState(false);
@@ -87,6 +92,9 @@ export const useAutonomousBot = ({
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isRunningRef = useRef(false);
+
+  // Bybit API hook for real order execution
+  const bybitAPI = useBybitAPI();
 
   // Check if trading is allowed based on rules
   const canTrade = useCallback((): { allowed: boolean; reason?: string } => {
@@ -232,21 +240,60 @@ export const useAutonomousBot = ({
     }
 
     const side: Trade['side'] = opportunity.recommendation === 'BUY' ? 'LONG' : 'SHORT';
+    const bybitSide: 'Buy' | 'Sell' = opportunity.recommendation === 'BUY' ? 'Buy' : 'Sell';
     
     // Calculate position size based on risk management
     const riskAmount = (accountBalance * rules.riskPerTradePercent) / 100;
     const stopDistance = Math.abs(opportunity.entryPrice - opportunity.stopLoss);
-    const calculatedQty = stopDistance > 0 ? riskAmount / stopDistance : 0.1;
+    const calculatedQty = stopDistance > 0 ? riskAmount / stopDistance : 0.01;
     const quantity = Math.max(0.001, Math.min(calculatedQty, 1)); // Limit between 0.001 and 1
+
+    // If sendRealOrders is enabled, execute real order on Bybit
+    let bybitOrderId: string | null = null;
+    if (sendRealOrders) {
+      addLog('AI', `📤 Enviando ordem real para Bybit: ${bybitSide} ${opportunity.symbol}`);
+      
+      try {
+        // First set leverage for the symbol
+        await bybitAPI.setLeverage(opportunity.symbol, leverage);
+        
+        // Place the order with stop loss and take profit
+        const orderResult = await bybitAPI.placeOrder(
+          opportunity.symbol,
+          bybitSide,
+          quantity,
+          {
+            orderType: 'Market',
+            stopLoss: opportunity.stopLoss,
+            takeProfit: opportunity.takeProfit,
+          }
+        );
+
+        if (orderResult && orderResult.retCode === 0) {
+          bybitOrderId = orderResult.result?.orderId;
+          addLog('SUCCESS', `✅ Ordem Bybit executada! ID: ${bybitOrderId || 'N/A'}`);
+          toast.success(`Ordem real executada: ${bybitSide} ${opportunity.symbol}`);
+        } else {
+          const errMsg = orderResult?.retMsg || 'Erro desconhecido';
+          addLog('ERROR', `❌ Erro ao executar ordem Bybit: ${errMsg}`);
+          toast.error(`Erro ao executar ordem: ${errMsg}`);
+          return null;
+        }
+      } catch (err: any) {
+        addLog('ERROR', `❌ Exceção ao enviar ordem: ${err.message}`);
+        toast.error(`Erro: ${err.message}`);
+        return null;
+      }
+    }
     
     const trade: Trade = {
-      id: crypto.randomUUID(),
+      id: bybitOrderId || crypto.randomUUID(),
       symbol: opportunity.symbol,
       side,
       strategy: 'AI_AUTO',
       entryPrice: opportunity.entryPrice,
       quantity,
-      leverage: 5,
+      leverage,
       stopLoss: opportunity.stopLoss,
       takeProfit: opportunity.takeProfit,
       status: 'OPEN',
@@ -277,12 +324,13 @@ export const useAutonomousBot = ({
 
     onDecisionMade?.(decision);
     
-    addLog('TRADE', `🚀 ${side} ${opportunity.symbol} @ $${opportunity.entryPrice.toLocaleString()} | Conf: ${opportunity.confidence}% | R/R: 1:${opportunity.riskRewardRatio?.toFixed(1) || '?'}`);
+    const realTag = sendRealOrders ? ' [REAL]' : ' [PAPER]';
+    addLog('TRADE', `🚀${realTag} ${side} ${opportunity.symbol} @ $${opportunity.entryPrice.toLocaleString()} | Conf: ${opportunity.confidence}% | R/R: 1:${opportunity.riskRewardRatio?.toFixed(1) || '?'}`);
     addLog('INFO', `📍 SL: $${opportunity.stopLoss.toLocaleString()} | TP: $${opportunity.takeProfit.toLocaleString()} | Qty: ${quantity.toFixed(4)}`);
-    toast.success(`Trade executado: ${side} ${opportunity.symbol} (${opportunity.confidence}%)`);
+    toast.success(`Trade executado: ${side} ${opportunity.symbol} (${opportunity.confidence}%)${sendRealOrders ? ' - ORDEM REAL' : ''}`);
 
     return trade;
-  }, [canTrade, rules, openTrades, accountBalance, onTradeOpened, onDecisionMade, addLog]);
+  }, [canTrade, rules, openTrades, accountBalance, onTradeOpened, onDecisionMade, addLog, sendRealOrders, leverage, bybitAPI]);
 
   const runAnalysisCycle = useCallback(async () => {
     if (!isRunningRef.current) return;
