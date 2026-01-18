@@ -4,15 +4,30 @@ import { cn } from '@/lib/utils';
 
 interface PriceCardProps {
   data: MarketData;
+  isSelected?: boolean;
+  onClick?: () => void;
 }
 
-export const PriceCard = ({ data }: PriceCardProps) => {
+export const PriceCard = ({ data, isSelected, onClick }: PriceCardProps) => {
   const isPositive = data.changePercentage24h >= 0;
   
   return (
-    <div className="glass-card p-4 hover:border-primary/30 transition-colors">
+    <div 
+      className={cn(
+        "glass-card p-4 transition-all cursor-pointer",
+        isSelected 
+          ? "border-primary ring-2 ring-primary/20 bg-primary/5" 
+          : "hover:border-primary/30"
+      )}
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-muted-foreground">{data.symbol}</span>
+        <span className={cn(
+          "text-sm font-medium",
+          isSelected ? "text-primary" : "text-muted-foreground"
+        )}>
+          {data.symbol}
+        </span>
         <div className={cn(
           "flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded",
           isPositive ? "bg-profit/10 text-profit" : "bg-loss/10 text-loss"

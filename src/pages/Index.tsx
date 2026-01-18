@@ -30,6 +30,7 @@ import { AlertCircle, Settings, Play, Pause } from 'lucide-react';
 const Index = () => {
   const navigate = useNavigate();
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
   const { announceTradeOpened, announceTradeClosed } = useVoiceAlerts({ enabled: voiceEnabled });
   const { user, signOut } = useAuth();
   
@@ -288,10 +289,15 @@ const Index = () => {
           </Button>
         </section>
 
-        {/* Price Tickers */}
+        {/* Price Tickers - Click to select */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {Object.values(marketData).map((data) => (
-            <PriceCard key={data.symbol} data={data} />
+            <PriceCard 
+              key={data.symbol} 
+              data={data} 
+              isSelected={data.symbol === selectedSymbol}
+              onClick={() => setSelectedSymbol(data.symbol)}
+            />
           ))}
         </section>
 
@@ -303,7 +309,7 @@ const Index = () => {
         {/* Chart + Right Panel */}
         <section className="grid grid-cols-1 xl:grid-cols-4 gap-3">
           <div className="xl:col-span-3 min-h-[380px]">
-            <TradingViewChart symbol="BTCUSDT" height={380} />
+            <TradingViewChart symbol={selectedSymbol} height={380} />
           </div>
           <div className="flex flex-col gap-3">
             <TradingAIPanel 
@@ -348,8 +354,8 @@ const Index = () => {
           <div className="flex flex-col gap-3">
             <AIMarketAnalysis 
               marketData={
-                marketData['BTCUSDT'] || {
-                  symbol: 'BTCUSDT',
+                marketData[selectedSymbol] || {
+                  symbol: selectedSymbol,
                   price: 0,
                   change24h: 0,
                   volume24h: 0,
