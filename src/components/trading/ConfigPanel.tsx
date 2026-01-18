@@ -1,8 +1,10 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Settings, Zap, Shield, Target, Layers } from 'lucide-react';
 import type { BotConfig } from '@/types/trading';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface ConfigPanelProps {
@@ -11,13 +13,36 @@ interface ConfigPanelProps {
 }
 
 export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
+  // Draft state so inputs always move smoothly; changes are applied only when user clicks OK.
+  const [draft, setDraft] = useState<BotConfig>(config);
+
+  useEffect(() => {
+    setDraft(config);
+  }, [config]);
+
+  const isDirty = useMemo(() => {
+    try {
+      return JSON.stringify(draft) !== JSON.stringify(config);
+    } catch {
+      return true;
+    }
+  }, [draft, config]);
+
+  const handleCancel = () => setDraft(config);
+  const handleApply = () => onUpdateConfig(draft);
+
   return (
     <div className="glass-card p-4 h-full">
-      <div className="flex items-center gap-2 mb-4">
-        <Settings className="w-5 h-5 text-muted-foreground" />
-        <h3 className="font-semibold">Configurações</h3>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <Settings className="w-5 h-5 text-muted-foreground" />
+          <h3 className="font-semibold">Configurações</h3>
+        </div>
+        {isDirty && (
+          <span className="text-xs text-muted-foreground">Alterações pendentes</span>
+        )}
       </div>
-      
+
       <div className="space-y-5">
         {/* Mode Toggle */}
         <div className="flex items-center justify-between">
@@ -26,22 +51,26 @@ export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
             <Label className="text-sm">Modo Real</Label>
           </div>
           <div className="flex items-center gap-2">
-            <span className={cn(
-              "text-xs font-medium",
-              config.mode === 'paper' ? "text-accent" : "text-muted-foreground"
-            )}>
+            <span
+              className={cn(
+                'text-xs font-medium',
+                draft.mode === 'paper' ? 'text-accent' : 'text-muted-foreground'
+              )}
+            >
               Paper
             </span>
             <Switch
-              checked={config.mode === 'live'}
-              onCheckedChange={(checked) => 
-                onUpdateConfig({ mode: checked ? 'live' : 'paper' })
+              checked={draft.mode === 'live'}
+              onCheckedChange={(checked) =>
+                setDraft((prev) => ({ ...prev, mode: checked ? 'live' : 'paper' }))
               }
             />
-            <span className={cn(
-              "text-xs font-medium",
-              config.mode === 'live' ? "text-warning" : "text-muted-foreground"
-            )}>
+            <span
+              className={cn(
+                'text-xs font-medium',
+                draft.mode === 'live' ? 'text-warning' : 'text-muted-foreground'
+              )}
+            >
               Live
             </span>
           </div>
@@ -54,22 +83,26 @@ export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
             <Label className="text-sm">Mercado</Label>
           </div>
           <div className="flex items-center gap-2">
-            <span className={cn(
-              "text-xs font-medium",
-              config.marketMode === 'SPOT' ? "text-accent" : "text-muted-foreground"
-            )}>
+            <span
+              className={cn(
+                'text-xs font-medium',
+                draft.marketMode === 'SPOT' ? 'text-accent' : 'text-muted-foreground'
+              )}
+            >
               Spot
             </span>
             <Switch
-              checked={config.marketMode === 'FUTURES'}
-              onCheckedChange={(checked) => 
-                onUpdateConfig({ marketMode: checked ? 'FUTURES' : 'SPOT' })
+              checked={draft.marketMode === 'FUTURES'}
+              onCheckedChange={(checked) =>
+                setDraft((prev) => ({ ...prev, marketMode: checked ? 'FUTURES' : 'SPOT' }))
               }
             />
-            <span className={cn(
-              "text-xs font-medium",
-              config.marketMode === 'FUTURES' ? "text-primary" : "text-muted-foreground"
-            )}>
+            <span
+              className={cn(
+                'text-xs font-medium',
+                draft.marketMode === 'FUTURES' ? 'text-primary' : 'text-muted-foreground'
+              )}
+            >
               Futures
             </span>
           </div>
@@ -82,11 +115,11 @@ export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
               <Target className="w-4 h-4 text-primary" />
               <Label className="text-sm">Alavancagem</Label>
             </div>
-            <span className="text-sm font-mono font-medium text-primary">{config.leverage}x</span>
+            <span className="text-sm font-mono font-medium text-primary">{draft.leverage}x</span>
           </div>
           <Slider
-            value={[config.leverage]}
-            onValueChange={([value]) => onUpdateConfig({ leverage: value })}
+            value={[draft.leverage]}
+            onValueChange={([value]) => setDraft((prev) => ({ ...prev, leverage: value }))}
             min={1}
             max={20}
             step={1}
@@ -105,11 +138,11 @@ export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
               <Shield className="w-4 h-4 text-profit" />
               <Label className="text-sm">Risco por Trade</Label>
             </div>
-            <span className="text-sm font-mono font-medium">{config.riskPerTrade}%</span>
+            <span className="text-sm font-mono font-medium">{draft.riskPerTrade}%</span>
           </div>
           <Slider
-            value={[config.riskPerTrade]}
-            onValueChange={([value]) => onUpdateConfig({ riskPerTrade: value })}
+            value={[draft.riskPerTrade]}
+            onValueChange={([value]) => setDraft((prev) => ({ ...prev, riskPerTrade: value }))}
             min={0.5}
             max={5}
             step={0.5}
@@ -121,11 +154,13 @@ export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label className="text-sm">Trades Simultâneos</Label>
-            <span className="text-sm font-mono font-medium">{config.maxConcurrentTrades}</span>
+            <span className="text-sm font-mono font-medium">{draft.maxConcurrentTrades}</span>
           </div>
           <Slider
-            value={[config.maxConcurrentTrades]}
-            onValueChange={([value]) => onUpdateConfig({ maxConcurrentTrades: value })}
+            value={[draft.maxConcurrentTrades]}
+            onValueChange={([value]) =>
+              setDraft((prev) => ({ ...prev, maxConcurrentTrades: value }))
+            }
             min={1}
             max={10}
             step={1}
@@ -137,18 +172,35 @@ export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label className="text-sm">Drawdown Máximo</Label>
-            <span className="text-sm font-mono font-medium text-loss">{config.maxDrawdown}%</span>
+            <span className="text-sm font-mono font-medium text-loss">{draft.maxDrawdown}%</span>
           </div>
           <Slider
-            value={[config.maxDrawdown]}
-            onValueChange={([value]) => onUpdateConfig({ maxDrawdown: value })}
+            value={[draft.maxDrawdown]}
+            onValueChange={([value]) => setDraft((prev) => ({ ...prev, maxDrawdown: value }))}
             min={5}
             max={25}
             step={1}
             className="w-full"
           />
         </div>
+
+        {/* Actions */}
+        <div className="pt-4 border-t border-border/40 flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleCancel}
+            disabled={!isDirty}
+          >
+            Cancelar
+          </Button>
+          <Button type="button" size="sm" onClick={handleApply} disabled={!isDirty}>
+            OK
+          </Button>
+        </div>
       </div>
     </div>
   );
 };
+
