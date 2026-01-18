@@ -14,6 +14,7 @@ import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
 import { TradingAIPanel } from '@/components/trading/TradingAIPanel';
 import { LiveNewsPanel } from '@/components/trading/LiveNewsPanel';
 import { AIMarketAnalysis } from '@/components/trading/AIMarketAnalysis';
+import { BybitPositionsPanel } from '@/components/trading/BybitPositionsPanel';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useRealTradingData } from '@/hooks/useRealTradingData';
 import { useVoiceAlerts, playVoiceToggleSound } from '@/hooks/useVoiceAlerts';
@@ -299,6 +300,17 @@ const Index = () => {
         {!isRealMode && (
           <section>
             <AIMemoryPanel isRealMode={isRealMode} />
+          </section>
+        )}
+
+        {/* Bybit Positions Panel - Only in Real Mode */}
+        {isRealMode && (
+          <section>
+            <BybitPositionsPanel 
+              positions={positions} 
+              loading={bybitLoading}
+              onRefresh={refreshBybit}
+            />
           </section>
         )}
 
