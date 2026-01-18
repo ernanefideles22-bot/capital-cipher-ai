@@ -13,14 +13,17 @@ const MarketDataSchema = z.object({
   price: z.number().positive(),
   change24h: z.number(),
   volume24h: z.number().nonnegative(),
-  high24h: z.number().positive(),
-  low24h: z.number().positive(),
+  // Some market feeds may not provide high/low immediately; we fall back to current price
+  high24h: z.number().positive().optional(),
+  low24h: z.number().positive().optional(),
   rsi: z.number().min(0).max(100).optional(),
-  macd: z.object({
-    value: z.number(),
-    signal: z.number(),
-    histogram: z.number()
-  }).optional(),
+  macd: z
+    .object({
+      value: z.number(),
+      signal: z.number(),
+      histogram: z.number(),
+    })
+    .optional(),
   sentiment: z.string().max(200).optional(),
   news: z.array(z.string().max(500)).max(10).optional(),
 });
@@ -91,10 +94,10 @@ serve(async (req) => {
     const sanitizedMarketData: MarketData = {
       ...marketData,
       symbol: marketData.symbol.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+      high24h: typeof marketData.high24h === 'number' && marketData.high24h > 0 ? marketData.high24h : marketData.price,
+      low24h: typeof marketData.low24h === 'number' && marketData.low24h > 0 ? marketData.low24h : marketData.price,
       sentiment: marketData.sentiment?.replace(/[<>{}[\]\\]/g, '').slice(0, 200),
-      news: marketData.news?.map(headline => 
-        headline.replace(/[<>{}[\]\\]/g, '').slice(0, 500)
-      )
+      news: marketData.news?.map((headline) => headline.replace(/[<>{}[\]\\]/g, '').slice(0, 500)),
     };
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -224,10 +227,10 @@ function buildUserPrompt(data: MarketData, analysisType: string): string {
   prompt += `**Current Price:** $${data.price.toLocaleString()}\n`;
   prompt += `**24h Change:** ${data.change24h >= 0 ? '+' : ''}${data.change24h.toFixed(2)}%\n`;
   prompt += `**24h Volume:** $${data.volume24h.toLocaleString()}\n`;
-  prompt += `**24h High:** $${data.high24h.toLocaleString()}\n`;
-  prompt += `**24h Low:** $${data.low24h.toLocaleString()}\n`;
-
-  if (data.rsi !== undefined) {
+  const high24h = (typeof data.high24h === 'number' ? data.high24h : data.price);
+  const low24h = (typeof data.low24h === 'number' ? data.low24h : data.price);
+  prompt += `**24h High:** $${high24h.toLocaleString()}\n`;
+  prompt += `**24h Low:** $${low24h.toLocaleString()}\n`;
     prompt += `**RSI (14):** ${data.rsi.toFixed(2)}\n`;
   }
 
