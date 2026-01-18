@@ -29,7 +29,15 @@ export const ConfigPanel = ({ config, onUpdateConfig }: ConfigPanelProps) => {
   }, [draft, config]);
 
   const handleCancel = () => setDraft(config);
-  const handleApply = () => onUpdateConfig(draft);
+  const handleApply = () => {
+    // Save to localStorage for persistence across page navigation
+    try {
+      localStorage.setItem('bot_config', JSON.stringify(draft));
+    } catch {
+      // ignore
+    }
+    onUpdateConfig(draft);
+  };
 
   return (
     <div className="glass-card p-4 h-full">

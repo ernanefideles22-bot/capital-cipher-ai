@@ -301,14 +301,34 @@ export const useTradingData = (options: UseTradingDataOptions = {}) => {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [aiDecisions, setAIDecisions] = useState<AIDecision[]>([]);
-  const [config, setConfig] = useState<BotConfig>({
-    mode: 'paper',
-    marketMode: 'FUTURES',
-    leverage: 5,
-    maxDrawdown: 10,
-    maxConcurrentTrades: 3,
-    riskPerTrade: 2,
-    assets: Object.keys(TRADING_PAIRS),
+  const [config, setConfig] = useState<BotConfig>(() => {
+    // Load saved config from localStorage
+    try {
+      const saved = localStorage.getItem('bot_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          mode: parsed.mode === 'paper' || parsed.mode === 'live' ? parsed.mode : 'paper',
+          marketMode: parsed.marketMode === 'SPOT' || parsed.marketMode === 'FUTURES' ? parsed.marketMode : 'FUTURES',
+          leverage: typeof parsed.leverage === 'number' ? parsed.leverage : 5,
+          maxDrawdown: typeof parsed.maxDrawdown === 'number' ? parsed.maxDrawdown : 10,
+          maxConcurrentTrades: typeof parsed.maxConcurrentTrades === 'number' ? parsed.maxConcurrentTrades : 3,
+          riskPerTrade: typeof parsed.riskPerTrade === 'number' ? parsed.riskPerTrade : 2,
+          assets: Array.isArray(parsed.assets) ? parsed.assets : Object.keys(TRADING_PAIRS),
+        };
+      }
+    } catch {
+      // ignore
+    }
+    return {
+      mode: 'paper',
+      marketMode: 'FUTURES',
+      leverage: 5,
+      maxDrawdown: 10,
+      maxConcurrentTrades: 3,
+      riskPerTrade: 2,
+      assets: Object.keys(TRADING_PAIRS),
+    };
   });
 
   const simulationRef = useRef<NodeJS.Timeout | null>(null);
