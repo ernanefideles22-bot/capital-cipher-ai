@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Activity, DollarSign, Target, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, DollarSign, Target, X, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -20,9 +20,10 @@ interface Position {
 interface ActiveTradesWidgetProps {
   positions: Position[];
   className?: string;
+  isRefreshing?: boolean;
 }
 
-export const ActiveTradesWidget = ({ positions, className }: ActiveTradesWidgetProps) => {
+export const ActiveTradesWidget = ({ positions, className, isRefreshing }: ActiveTradesWidgetProps) => {
   const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
   const [animatingPnl, setAnimatingPnl] = useState<Record<string, 'up' | 'down' | null>>({});
   const [prevPnl, setPrevPnl] = useState<Record<string, number>>({});
@@ -80,6 +81,9 @@ export const ActiveTradesWidget = ({ positions, className }: ActiveTradesWidgetP
         <div className="flex items-center gap-1.5">
           <Activity className="w-4 h-4 text-primary animate-pulse" />
           <span className="text-xs font-medium">{positions.length} Trade{positions.length > 1 ? 's' : ''} Ativo{positions.length > 1 ? 's' : ''}</span>
+          {isRefreshing && (
+            <RefreshCw className="w-3 h-3 text-primary animate-spin" />
+          )}
         </div>
         
         <div className="h-4 w-px bg-border" />

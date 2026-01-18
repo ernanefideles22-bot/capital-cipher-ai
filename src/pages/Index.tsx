@@ -46,7 +46,7 @@ const Index = () => {
   const { user, signOut } = useAuth();
   
   // Get mode from Bybit account hook
-  const { isRealMode, wallet, positions, refreshData: refreshBybit, loading: bybitLoading } = useBybitAccount();
+  const { isRealMode, wallet, positions, refreshData: refreshBybit, loading: bybitLoading, isRefreshing } = useBybitAccount();
   
   // DEMO mode data - simulated
   const { 
@@ -321,7 +321,7 @@ const Index = () => {
             {/* Active Trades Widget - Real-time P&L */}
             {positions.length > 0 && (
               <div className="pt-2 border-t border-profit/20">
-                <ActiveTradesWidget positions={positions} />
+                <ActiveTradesWidget positions={positions} isRefreshing={isRefreshing} />
               </div>
             )}
           </div>
