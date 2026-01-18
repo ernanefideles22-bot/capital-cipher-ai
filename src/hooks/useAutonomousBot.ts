@@ -241,47 +241,76 @@ export const useAutonomousBot = ({
 
     const side: Trade['side'] = opportunity.recommendation === 'BUY' ? 'LONG' : 'SHORT';
     const bybitSide: 'Buy' | 'Sell' = opportunity.recommendation === 'BUY' ? 'Buy' : 'Sell';
-    
+    const isLong = bybitSide === 'Buy';
+
     // Calculate position size based on risk management
     const riskAmount = (accountBalance * rules.riskPerTradePercent) / 100;
     const stopDistance = Math.abs(opportunity.entryPrice - opportunity.stopLoss);
-    const calculatedQty = stopDistance > 0 ? riskAmount / stopDistance : 0.01;
-    const quantity = Math.max(0.001, Math.min(calculatedQty, 1)); // Limit between 0.001 and 1
+    const calculatedQty = stopDistance > 0 ? riskAmount / stopDistance : 0;
+
+    // Bybit typically enforces a minimum notional (ex: 5 USDT). If we can't meet it within risk,
+    // we skip the trade (instead of forcing a bigger size that violates risk rules).
+    const minNotionalUSDT = 5;
+    const minQtyForNotional = opportunity.entryPrice > 0 ? minNotionalUSDT / opportunity.entryPrice : 0;
+
+    let quantity = Number.isFinite(calculatedQty) && calculatedQty > 0 ? calculatedQty : 0;
+    if (quantity < minQtyForNotional) {
+      const riskAtMinQty = minQtyForNotional * stopDistance;
+      if (riskAtMinQty > riskAmount) {
+        addLog('WARN', `⚠️ ${opportunity.symbol}: Ordem bloqueada (mínimo ${minNotionalUSDT}USDT exige qty=${minQtyForNotional.toFixed(6)}, risco seria $${riskAtMinQty.toFixed(2)} > $${riskAmount.toFixed(2)})`);
+        return null;
+      }
+      quantity = minQtyForNotional;
+    }
+
+    // Avoid scientific notation and overly long floats
+    quantity = parseFloat(quantity.toFixed(6));
+
+    // Validate TP/SL direction (avoid Bybit rejection). If invalid, omit the field.
+    const slValid = isLong ? opportunity.stopLoss < opportunity.entryPrice : opportunity.stopLoss > opportunity.entryPrice;
+    const tpValid = isLong ? opportunity.takeProfit > opportunity.entryPrice : opportunity.takeProfit < opportunity.entryPrice;
+
+    const orderOptions: {
+      orderType: 'Market';
+      takeProfit?: number;
+      stopLoss?: number;
+    } = {
+      orderType: 'Market',
+      ...(slValid ? { stopLoss: opportunity.stopLoss } : {}),
+      ...(tpValid ? { takeProfit: opportunity.takeProfit } : {}),
+    };
+
+    if (!slValid) addLog('WARN', `⚠️ ${opportunity.symbol}: StopLoss inválido para ${isLong ? 'LONG' : 'SHORT'}; enviando ordem sem SL`);
+    if (!tpValid) addLog('WARN', `⚠️ ${opportunity.symbol}: TakeProfit inválido para ${isLong ? 'LONG' : 'SHORT'}; enviando ordem sem TP`);
 
     // If sendRealOrders is enabled, execute real order on Bybit
     let bybitOrderId: string | null = null;
     if (sendRealOrders) {
-      addLog('AI', `📤 Enviando ordem real para Bybit: ${bybitSide} ${opportunity.symbol}`);
-      
+      addLog('AI', `📤 Enviando ordem real para Bybit: ${bybitSide} ${opportunity.symbol} (qty=${quantity})`);
+
       try {
-        // First set leverage for the symbol
-        await bybitAPI.setLeverage(opportunity.symbol, leverage);
-        
-        // Place the order with stop loss and take profit
-        const orderResult = await bybitAPI.placeOrder(
-          opportunity.symbol,
-          bybitSide,
-          quantity,
-          {
-            orderType: 'Market',
-            stopLoss: opportunity.stopLoss,
-            takeProfit: opportunity.takeProfit,
-          }
-        );
+        const levRes = await bybitAPI.setLeverage(opportunity.symbol, leverage);
+        if (levRes?.retCode !== 0) {
+          addLog('WARN', `⚠️ Falha ao setar alavancagem (${levRes?.retCode}): ${levRes?.retMsg || 'sem mensagem'}`);
+        }
+
+        const orderResult = await bybitAPI.placeOrder(opportunity.symbol, bybitSide, quantity, orderOptions);
 
         if (orderResult && orderResult.retCode === 0) {
           bybitOrderId = orderResult.result?.orderId;
           addLog('SUCCESS', `✅ Ordem Bybit executada! ID: ${bybitOrderId || 'N/A'}`);
           toast.success(`Ordem real executada: ${bybitSide} ${opportunity.symbol}`);
         } else {
-          const errMsg = orderResult?.retMsg || 'Erro desconhecido';
-          addLog('ERROR', `❌ Erro ao executar ordem Bybit: ${errMsg}`);
+          const errMsg = orderResult?.retMsg || (orderResult as any)?.error || bybitAPI.error || 'Erro desconhecido';
+          const errCode = orderResult?.retCode ?? -1;
+          addLog('ERROR', `❌ Erro ao executar ordem Bybit (${errCode}): ${errMsg}`);
           toast.error(`Erro ao executar ordem: ${errMsg}`);
           return null;
         }
       } catch (err: any) {
-        addLog('ERROR', `❌ Exceção ao enviar ordem: ${err.message}`);
-        toast.error(`Erro: ${err.message}`);
+        const msg = err?.message || 'Erro desconhecido';
+        addLog('ERROR', `❌ Exceção ao enviar ordem: ${msg}`);
+        toast.error(`Erro: ${msg}`);
         return null;
       }
     }
