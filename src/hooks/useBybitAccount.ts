@@ -15,6 +15,7 @@ interface BybitAccountState {
   positions: any[];
   lastUpdate: Date | null;
   isRealMode: boolean;
+  isRefreshing: boolean;
   refreshData: () => Promise<void>;
   toggleMode: () => void;
 }
@@ -35,6 +36,7 @@ export function useBybitAccount(): BybitAccountState {
     const saved = localStorage.getItem('bybit-mode');
     return saved === 'real';
   });
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [, forceUpdate] = useState({});
 
   // Subscribe to changes
@@ -47,17 +49,22 @@ export function useBybitAccount(): BybitAccountState {
   const refreshData = useCallback(async () => {
     if (!isRealMode) return;
     
-    const isConnected = await testConnection();
-    
-    if (isConnected) {
-      const walletData = await getWalletBalance();
-      if (walletData) {
-        setWallet(walletData);
-      }
+    setIsRefreshing(true);
+    try {
+      const isConnected = await testConnection();
       
-      const positionsData = await getPositions();
-      setPositions(positionsData);
-      setLastUpdate(new Date());
+      if (isConnected) {
+        const walletData = await getWalletBalance();
+        if (walletData) {
+          setWallet(walletData);
+        }
+        
+        const positionsData = await getPositions();
+        setPositions(positionsData);
+        setLastUpdate(new Date());
+      }
+    } finally {
+      setIsRefreshing(false);
     }
   }, [isRealMode, testConnection, getWalletBalance, getPositions]);
 
@@ -94,6 +101,7 @@ export function useBybitAccount(): BybitAccountState {
     positions: isRealMode ? positions : [],
     lastUpdate,
     isRealMode,
+    isRefreshing,
     refreshData,
     toggleMode,
   };
