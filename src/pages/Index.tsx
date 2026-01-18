@@ -407,6 +407,9 @@ const Index = () => {
               isRunning={autonomousBot.isRunning}
               onAnalyzeNow={autonomousBot.analyzeNow}
               onExecuteOpportunity={autonomousBot.executeOpportunity}
+              marketPrices={Object.fromEntries(
+                Object.values(marketData).map(d => [d.symbol, d.price])
+              )}
             />
           </section>
         )}
