@@ -287,10 +287,10 @@ const Index = () => {
 
         {/* Chart + Right Panel */}
         <section className="grid grid-cols-1 xl:grid-cols-4 gap-3">
-          <div className="xl:col-span-3">
+          <div className="xl:col-span-3 min-h-[380px]">
             <TradingViewChart symbol="BTCUSDT" height={380} />
           </div>
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             <TradingAIPanel onTradeExecuted={isRealMode ? handleRealTradeExecuted : undefined} />
             <DrawdownGauge stats={botStats} config={config} />
           </div>
@@ -304,7 +304,7 @@ const Index = () => {
         )}
 
         {/* Bybit Positions Panel - Only in Real Mode */}
-        {isRealMode && (
+        {isRealMode && positions.length > 0 && (
           <section>
             <BybitPositionsPanel 
               positions={positions} 
@@ -317,14 +317,14 @@ const Index = () => {
         {/* Main Content Grid */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {/* Left Column - AI Learning & Trades */}
-          <div className="lg:col-span-2 space-y-3">
+          <div className="lg:col-span-2 flex flex-col gap-3">
             {/* AI Learning Panel - Only visible in demo mode */}
-            <AILearningPanel isRealMode={isRealMode} />
+            {!isRealMode && <AILearningPanel isRealMode={isRealMode} />}
             <TradesTable trades={trades} isRealMode={isRealMode} />
           </div>
 
           {/* Right Column - AI Analysis, Decisions */}
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             <AIMarketAnalysis 
               marketData={
                 marketData['BTCUSDT'] || {
@@ -337,21 +337,17 @@ const Index = () => {
                 }
               }
             />
-            <div className="h-[240px]">
-              <AIDecisionsPanel decisions={aiDecisions} isRealMode={isRealMode} />
-            </div>
+            <AIDecisionsPanel decisions={aiDecisions} isRealMode={isRealMode} />
           </div>
         </section>
 
         {/* Logs + News */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <div className="h-[240px]">
-            <LogsPanel 
-              logs={logs} 
-              isRealMode={isRealMode} 
-              onClearLogs={isRealMode ? realData.clearLogs : demoClearLogs}
-            />
-          </div>
+          <LogsPanel 
+            logs={logs} 
+            isRealMode={isRealMode} 
+            onClearLogs={isRealMode ? realData.clearLogs : demoClearLogs}
+          />
           <LiveNewsPanel />
         </section>
 
