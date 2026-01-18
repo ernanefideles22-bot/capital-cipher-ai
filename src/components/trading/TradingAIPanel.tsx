@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { useTradingAI } from '@/hooks/useTradingAI';
+import { useTradingAI, type OnTradeExecutedCallback } from '@/hooks/useTradingAI';
 import { 
   Bot, 
   Play, 
@@ -23,7 +23,11 @@ import {
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-export const TradingAIPanel = () => {
+interface TradingAIPanelProps {
+  onTradeExecuted?: OnTradeExecutedCallback;
+}
+
+export const TradingAIPanel = ({ onTradeExecuted }: TradingAIPanelProps) => {
   const {
     loading,
     error,
@@ -35,7 +39,7 @@ export const TradingAIPanel = () => {
     startAutoTrading,
     stopAutoTrading,
     updateConfig,
-  } = useTradingAI();
+  } = useTradingAI({ onTradeExecuted });
 
   const [showSettings, setShowSettings] = useState(false);
 
