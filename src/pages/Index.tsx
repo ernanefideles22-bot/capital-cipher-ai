@@ -20,12 +20,13 @@ import { useRealTradingData } from '@/hooks/useRealTradingData';
 import { useVoiceAlerts, playVoiceToggleSound } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
 import { useBybitAccount } from '@/hooks/useBybitAccount';
+import { useAutonomousBot } from '@/hooks/useAutonomousBot';
 import type { TradeResult } from '@/hooks/useTradingAI';
-import type { Trade, BotStats } from '@/types/trading';
+import type { Trade, BotStats, AIDecision, LogEntry } from '@/types/trading';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Settings, Play, Pause } from 'lucide-react';
+import { AlertCircle, Settings, Play, Pause, Brain, Loader2 } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -87,14 +88,50 @@ const Index = () => {
     return demoMarketData;
   }, [demoMarketData]);
 
-  // Toggle bot status based on mode
+  // Autonomous bot hook - handles multi-pair analysis
+  const handleBotLog = useCallback((log: LogEntry) => {
+    if (isRealMode) {
+      realData.addLog(log.level, log.message);
+    }
+  }, [isRealMode, realData]);
+
+  const handleBotDecision = useCallback((decision: AIDecision) => {
+    if (isRealMode) {
+      realData.addAIDecision({
+        symbol: decision.symbol,
+        action: decision.action,
+        confidence: decision.confidence,
+        reasoning: decision.reasoning,
+        indicators: decision.indicators,
+      });
+    }
+  }, [isRealMode, realData]);
+
+  const handleBotTradeOpened = useCallback((trade: Trade) => {
+    if (isRealMode && user) {
+      realData.addTrade(trade, trade.aiConfidence, trade.aiReasoning);
+    }
+  }, [isRealMode, user, realData]);
+
+  const autonomousBot = useAutonomousBot({
+    marketData,
+    onTradeOpened: handleBotTradeOpened,
+    onDecisionMade: handleBotDecision,
+    onLog: handleBotLog,
+    intervalMs: 60000, // Analyze every 60 seconds
+    minConfidence: 70,
+    maxConcurrentTrades: config.maxConcurrentTrades,
+  });
+
+  // Toggle bot status based on mode - now uses autonomous bot
   const toggleBotStatus = useCallback(() => {
     if (isRealMode) {
-      realData.setBotStatus(botStats.status === 'RUNNING' ? 'PAUSED' : 'RUNNING');
+      autonomousBot.toggle();
+      realData.setBotStatus(autonomousBot.isRunning ? 'PAUSED' : 'RUNNING');
     } else {
       demoToggleBot();
     }
-  }, [isRealMode, realData, botStats.status, demoToggleBot]);
+  }, [isRealMode, autonomousBot, realData, demoToggleBot]);
 
   // Handle bot status change from TradingAIPanel (e.g., auto-stop by rules)
   const handleBotStatusChange = useCallback((running: boolean, reason?: string) => {
@@ -218,27 +255,39 @@ const Index = () => {
         {isRealMode && (
           <div className="bg-profit/10 border border-profit/30 rounded-lg p-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-profit" />
+              <div className={`w-2 h-2 rounded-full ${autonomousBot.isRunning ? 'bg-profit animate-pulse' : 'bg-muted'}`} />
               <span className="text-sm font-medium text-profit">
-                Modo Conta Real - Operações reais na Bybit
+                {autonomousBot.isRunning ? 'Bot IA Autônomo - Analisando todos os pares' : 'Modo Conta Real'}
               </span>
+              {autonomousBot.isAnalyzing && (
+                <Badge variant="outline" className="border-primary text-primary gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Analisando...
+                </Badge>
+              )}
+              {autonomousBot.opportunities.length > 0 && (
+                <Badge variant="outline" className="border-profit text-profit">
+                  {autonomousBot.opportunities.length} oportunidades
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
-                variant={botStats.status === 'RUNNING' ? 'destructive' : 'default'}
+                variant={autonomousBot.isRunning ? 'destructive' : 'default'}
                 onClick={toggleBotStatus}
+                disabled={autonomousBot.isAnalyzing}
                 className="h-7 px-3 gap-1.5"
               >
-                {botStats.status === 'RUNNING' ? (
+                {autonomousBot.isRunning ? (
                   <>
                     <Pause className="w-3 h-3" />
-                    Parar
+                    Parar Bot
                   </>
                 ) : (
                   <>
-                    <Play className="w-3 h-3" />
-                    Iniciar
+                    <Brain className="w-3 h-3" />
+                    Iniciar Bot IA
                   </>
                 )}
               </Button>

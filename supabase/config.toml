@@ -6,5 +6,8 @@ verify_jwt = false
 [functions.market-analysis]
 verify_jwt = false
 
+[functions.multi-pair-analysis]
+verify_jwt = false
+
 [functions.trading-ai]
 verify_jwt = false
