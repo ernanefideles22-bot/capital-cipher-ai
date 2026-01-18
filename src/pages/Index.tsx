@@ -16,7 +16,7 @@ import { LiveNewsPanel } from '@/components/trading/LiveNewsPanel';
 import { AIMarketAnalysis } from '@/components/trading/AIMarketAnalysis';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
 import { useRealTradingData } from '@/hooks/useRealTradingData';
-import { useVoiceAlerts } from '@/hooks/useVoiceAlerts';
+import { useVoiceAlerts, playVoiceToggleSound } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
 import { useBybitAccount } from '@/hooks/useBybitAccount';
 import type { TradeResult } from '@/hooks/useTradingAI';
@@ -181,7 +181,11 @@ const Index = () => {
           />
         }
         voiceEnabled={voiceEnabled}
-        onToggleVoice={() => setVoiceEnabled(!voiceEnabled)}
+        onToggleVoice={() => {
+          const newState = !voiceEnabled;
+          setVoiceEnabled(newState);
+          playVoiceToggleSound(newState);
+        }}
         onSignOut={handleSignOut}
         userEmail={user?.email}
       />
