@@ -114,30 +114,32 @@ export function useTradingAI(options: UseTradingAIOptions = {}) {
 
   // Check rules and stop bot if necessary
   const checkStopRules = useCallback(() => {
-    // Check max drawdown rule
-    if (currentDrawdown >= config.maxDrawdown) {
-      const reason = `Drawdown máximo atingido (${currentDrawdown.toFixed(1)}% >= ${config.maxDrawdown}%)`;
+    // Check max drawdown rule - use > (strictly greater) to allow bot to run at the limit
+    if (currentDrawdown > config.maxDrawdown) {
+      const reason = `Drawdown máximo atingido (${currentDrawdown.toFixed(1)}% > ${config.maxDrawdown}%)`;
       return reason;
     }
 
-    // Check max daily loss rule
-    if (dailyPnL <= -config.maxDailyLoss) {
-      const reason = `Perda diária máxima atingida ($${Math.abs(dailyPnL).toFixed(2)} >= $${config.maxDailyLoss})`;
+    // Check max daily loss rule - use < (strictly less than negative limit)
+    if (dailyPnL < -config.maxDailyLoss) {
+      const reason = `Perda diária máxima atingida ($${Math.abs(dailyPnL).toFixed(2)} > $${config.maxDailyLoss})`;
       return reason;
     }
 
     return null;
   }, [currentDrawdown, dailyPnL, config.maxDrawdown, config.maxDailyLoss]);
 
-  // Auto-stop when rules are violated
+  // Auto-stop when rules are violated - but only if we have actual values
   useEffect(() => {
-    if (isRunning) {
+    // Only check rules if bot is running AND we have meaningful values
+    // Skip check on initial render or when values are default/zero
+    if (isRunning && (currentDrawdown > 0 || dailyPnL !== 0)) {
       const reason = checkStopRules();
       if (reason) {
         stopAutoTrading(reason);
       }
     }
-  }, [isRunning, currentDrawdown, dailyPnL]);
+  }, [isRunning, currentDrawdown, dailyPnL, checkStopRules]);
 
   // Sync with external running state
   useEffect(() => {
