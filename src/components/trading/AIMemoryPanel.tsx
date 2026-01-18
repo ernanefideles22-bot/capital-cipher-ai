@@ -271,13 +271,22 @@ const generateMemoryStats = (): MemoryStats => ({
   lastUpdate: new Date(),
 });
 
-export const AIMemoryPanel = () => {
+interface AIMemoryPanelProps {
+  isRealMode?: boolean;
+}
+
+export const AIMemoryPanel = ({ isRealMode = false }: AIMemoryPanelProps) => {
   const [activeTab, setActiveTab] = useState('patterns');
   
   const patterns = useMemo(() => generatePatterns(), []);
   const lessons = useMemo(() => generateLessons(), []);
   const evolution = useMemo(() => generateEvolution(), []);
   const stats = useMemo(() => generateMemoryStats(), []);
+
+  // Hide panel in real mode - AI uses demo memories internally but doesn't show them
+  if (isRealMode) {
+    return null;
+  }
 
   const categoryColors = {
     bullish: 'text-profit border-profit/50 bg-profit/10',

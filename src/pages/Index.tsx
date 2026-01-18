@@ -238,16 +238,19 @@ const Index = () => {
           </div>
         </section>
 
-        {/* AI Memory Panel */}
-        <section>
-          <AIMemoryPanel />
-        </section>
+        {/* AI Memory Panel - Only visible in demo mode */}
+        {!isRealMode && (
+          <section>
+            <AIMemoryPanel isRealMode={isRealMode} />
+          </section>
+        )}
 
         {/* Main Content Grid */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {/* Left Column - AI Learning & Trades */}
           <div className="lg:col-span-2 space-y-3">
-            <AILearningPanel />
+            {/* AI Learning Panel - Only visible in demo mode */}
+            <AILearningPanel isRealMode={isRealMode} />
             <TradesTable trades={trades} isRealMode={isRealMode} />
           </div>
 

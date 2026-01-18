@@ -50,6 +50,7 @@ interface LearningMetric {
 
 interface AILearningPanelProps {
   className?: string;
+  isRealMode?: boolean;
 }
 
 // Generate realistic AI learning data
@@ -112,7 +113,7 @@ const generateRadarData = () => [
   { metric: 'Institutional', value: 88, fullMark: 100 },
 ];
 
-export const AILearningPanel = ({ className }: AILearningPanelProps) => {
+export const AILearningPanel = ({ className, isRealMode = false }: AILearningPanelProps) => {
   const [activeTab, setActiveTab] = useState('evolution');
   
   const learningData = useMemo(() => generateLearningData(), []);
@@ -123,6 +124,11 @@ export const AILearningPanel = ({ className }: AILearningPanelProps) => {
   const currentWinRate = learningData[learningData.length - 1]?.winRate || 0;
   const totalTrades = strategyWeights.reduce((acc, s) => acc + s.trades, 0);
   const totalPnL = strategyWeights.reduce((acc, s) => acc + s.pnl, 0);
+
+  // Hide panel in real mode - AI uses demo memories internally but doesn't show them
+  if (isRealMode) {
+    return null;
+  }
 
   const TrendIcon = ({ trend }: { trend: 'up' | 'down' | 'stable' }) => {
     if (trend === 'up') return <ChevronUp className="w-3 h-3 text-profit" />;
