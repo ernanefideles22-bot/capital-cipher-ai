@@ -14,7 +14,7 @@ export const StatsGrid = ({ stats, isRealMode = false, walletBalance }: StatsGri
   // Different metrics for real vs demo mode
   const metrics = isRealMode
     ? [
-        // Real mode metrics
+        // Real mode metrics - only wallet balance is real, others are zeroed
         {
           label: 'Saldo Bybit',
           value: walletBalance ?? 0,
@@ -25,31 +25,31 @@ export const StatsGrid = ({ stats, isRealMode = false, walletBalance }: StatsGri
         },
         {
           label: 'P&L Total',
-          value: displayStats.totalPnL,
+          value: 0, // Zeroed for real mode - will show real data when trading starts
           format: 'currency' as const,
           icon: TrendingUp,
-          isPositive: displayStats.totalPnL >= 0,
+          isPositive: true,
           isRealData: true,
         },
         {
           label: 'P&L Diário',
-          value: displayStats.dailyPnL,
+          value: 0, // Zeroed for real mode
           format: 'currency' as const,
           icon: BarChart3,
-          isPositive: displayStats.dailyPnL >= 0,
+          isPositive: true,
           isRealData: true,
         },
         {
           label: 'P&L Semanal',
-          value: displayStats.weeklyPnL,
+          value: 0, // Zeroed for real mode
           format: 'currency' as const,
           icon: Target,
-          isPositive: displayStats.weeklyPnL >= 0,
+          isPositive: true,
           isRealData: true,
         },
         {
           label: 'Total Trades',
-          value: displayStats.totalTrades,
+          value: 0, // Zeroed for real mode
           format: 'number' as const,
           icon: BarChart2,
           threshold: 0,
@@ -57,7 +57,7 @@ export const StatsGrid = ({ stats, isRealMode = false, walletBalance }: StatsGri
         },
         {
           label: 'Taxa de Acerto',
-          value: displayStats.winRate,
+          value: 0, // Zeroed for real mode
           format: 'percentage' as const,
           icon: Activity,
           threshold: 60,
