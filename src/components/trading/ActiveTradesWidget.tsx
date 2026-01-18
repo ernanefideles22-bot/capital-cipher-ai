@@ -279,21 +279,19 @@ export const ActiveTradesWidget = ({ positions, className, isRefreshing, onPosit
                       </span>
                     </div>
                     
-                    {/* Close Position Button */}
-                    <Button
-                      size="sm"
-                      variant="ghost"
+                    {/* Close Position Button - Simple X */}
+                    <button
                       onClick={(e) => handleClosePosition(e, pos)}
                       disabled={closingSymbol === pos.symbol}
-                      className="h-6 w-6 p-0 hover:bg-loss/20 hover:text-loss"
-                      title="Encerrar posição"
+                      className="w-5 h-5 flex items-center justify-center rounded hover:bg-loss/20 text-muted-foreground hover:text-loss transition-colors disabled:opacity-50"
+                      title="Encerrar"
                     >
                       {closingSymbol === pos.symbol ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <Loader2 className="w-3 h-3 animate-spin" />
                       ) : (
-                        <X className="w-3.5 h-3.5" />
+                        <X className="w-3 h-3" />
                       )}
-                    </Button>
+                    </button>
                   </div>
                 </div>
                 
