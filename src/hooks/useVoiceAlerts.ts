@@ -14,6 +14,53 @@ const defaultOptions: VoiceAlertOptions = {
   pitch: 1,
 };
 
+// Audio context for playing beep sounds
+let audioContext: AudioContext | null = null;
+
+const getAudioContext = (): AudioContext => {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  }
+  return audioContext;
+};
+
+// Play a beep sound
+const playBeep = (frequency: number = 800, duration: number = 150, volume: number = 0.3) => {
+  try {
+    const ctx = getAudioContext();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    oscillator.frequency.value = frequency;
+    oscillator.type = 'sine';
+
+    gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration / 1000);
+
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + duration / 1000);
+  } catch (error) {
+    console.warn('Failed to play beep:', error);
+  }
+};
+
+export const playVoiceToggleSound = (enabled: boolean) => {
+  if (enabled) {
+    // Ascending tone for enabling
+    playBeep(600, 100, 0.2);
+    setTimeout(() => playBeep(800, 100, 0.2), 100);
+    setTimeout(() => playBeep(1000, 150, 0.25), 200);
+  } else {
+    // Descending tone for disabling
+    playBeep(800, 100, 0.2);
+    setTimeout(() => playBeep(600, 100, 0.2), 100);
+    setTimeout(() => playBeep(400, 150, 0.15), 200);
+  }
+};
+
 export const useVoiceAlerts = (options: Partial<VoiceAlertOptions> = {}) => {
   const settings = { ...defaultOptions, ...options };
   const isSpeaking = useRef(false);
