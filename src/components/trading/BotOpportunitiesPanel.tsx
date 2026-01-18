@@ -1,4 +1,5 @@
-import { TrendingUp, TrendingDown, Target, Shield, Zap, Brain, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { TrendingUp, TrendingDown, Target, Shield, Zap, Brain, Loader2, BarChart2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -6,6 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { BotOpportunity, MultiPairAnalysisResult } from '@/hooks/useAutonomousBot';
+import { FloatingPriceChart } from './FloatingPriceChart';
 
 interface BotOpportunitiesPanelProps {
   opportunities: BotOpportunity[];
@@ -14,6 +16,7 @@ interface BotOpportunitiesPanelProps {
   isRunning: boolean;
   onAnalyzeNow: () => void;
   onExecuteOpportunity?: (opportunity: BotOpportunity) => void;
+  marketPrices?: Record<string, number>;
 }
 
 export const BotOpportunitiesPanel = ({
@@ -23,7 +26,9 @@ export const BotOpportunitiesPanel = ({
   isRunning,
   onAnalyzeNow,
   onExecuteOpportunity,
+  marketPrices = {},
 }: BotOpportunitiesPanelProps) => {
+  const [expandedChart, setExpandedChart] = useState<string | null>(null);
   const formatPrice = (price: number) => {
     if (price >= 1000) {
       return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -164,12 +169,35 @@ export const BotOpportunitiesPanel = ({
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setExpandedChart(expandedChart === opp.symbol ? null : opp.symbol)}
+                      className="h-6 w-6 p-0"
+                      title="Ver gráfico de níveis"
+                    >
+                      <BarChart2 className={cn(
+                        "w-4 h-4 transition-colors",
+                        expandedChart === opp.symbol ? "text-primary" : "text-muted-foreground"
+                      )} />
+                    </Button>
                     <span className={cn("text-sm font-bold font-mono", getScoreColor(opp.score))}>
                       {opp.score}
                     </span>
                     <span className="text-[10px] text-muted-foreground">score</span>
                   </div>
                 </div>
+
+                {/* Floating Chart (when expanded) */}
+                {expandedChart === opp.symbol && (
+                  <div className="mb-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <FloatingPriceChart
+                      opportunity={opp}
+                      currentPrice={marketPrices[opp.symbol]}
+                      onClose={() => setExpandedChart(null)}
+                    />
+                  </div>
+                )}
 
                 {/* Confidence Bar */}
                 <div className="mb-2">
