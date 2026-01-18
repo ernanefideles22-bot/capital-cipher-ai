@@ -11,6 +11,11 @@ export interface TechnicalIndicators {
   rsi: number;
   rsiSignal: 'OVERSOLD' | 'OVERBOUGHT' | 'NEUTRAL';
   
+  // Stochastic RSI (NEW)
+  stochRsiK: number;
+  stochRsiD: number;
+  stochRsiSignal: 'OVERSOLD' | 'OVERBOUGHT' | 'BULLISH_CROSS' | 'BEARISH_CROSS' | 'NEUTRAL';
+  
   // MACD
   macd: number;
   macdSignal: number;
@@ -29,6 +34,22 @@ export interface TechnicalIndicators {
   ema21: number;
   ema50: number;
   emaTrend: 'STRONG_BULLISH' | 'BULLISH' | 'BEARISH' | 'STRONG_BEARISH' | 'NEUTRAL';
+  
+  // ADX - Average Directional Index (NEW)
+  adx: number;
+  plusDI: number;
+  minusDI: number;
+  adxTrend: 'STRONG_TREND' | 'TRENDING' | 'WEAK_TREND' | 'NO_TREND';
+  adxDirection: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  
+  // Ichimoku Cloud (NEW)
+  ichimokuTenkan: number;
+  ichimokuKijun: number;
+  ichimokuSenkouA: number;
+  ichimokuSenkouB: number;
+  ichimokuChikou: number;
+  ichimokuSignal: 'STRONG_BULLISH' | 'BULLISH' | 'BEARISH' | 'STRONG_BEARISH' | 'NEUTRAL';
+  ichimokuCloudPosition: 'ABOVE_CLOUD' | 'IN_CLOUD' | 'BELOW_CLOUD';
   
   // Volume
   volumeRatio: number; // Current vs average
@@ -203,6 +224,200 @@ function calculateATR(klines: KlineData[], period: number = 14): number {
   return atr;
 }
 
+// Calculate Stochastic RSI
+function calculateStochRSI(prices: number[], rsiPeriod: number = 14, stochPeriod: number = 14, kPeriod: number = 3, dPeriod: number = 3): {
+  k: number; d: number; signal: TechnicalIndicators['stochRsiSignal'];
+} {
+  if (prices.length < rsiPeriod + stochPeriod) {
+    return { k: 50, d: 50, signal: 'NEUTRAL' };
+  }
+  
+  // Calculate RSI values for each period
+  const rsiValues: number[] = [];
+  for (let i = rsiPeriod; i <= prices.length; i++) {
+    const slice = prices.slice(0, i);
+    rsiValues.push(calculateRSI(slice, rsiPeriod));
+  }
+  
+  if (rsiValues.length < stochPeriod) {
+    return { k: 50, d: 50, signal: 'NEUTRAL' };
+  }
+  
+  // Calculate Stochastic of RSI
+  const recentRsi = rsiValues.slice(-stochPeriod);
+  const minRsi = Math.min(...recentRsi);
+  const maxRsi = Math.max(...recentRsi);
+  const currentRsi = recentRsi[recentRsi.length - 1];
+  
+  const rawK = maxRsi !== minRsi ? ((currentRsi - minRsi) / (maxRsi - minRsi)) * 100 : 50;
+  
+  // Smooth K with SMA
+  const kValues: number[] = [];
+  for (let i = stochPeriod; i <= rsiValues.length; i++) {
+    const slice = rsiValues.slice(i - stochPeriod, i);
+    const minR = Math.min(...slice);
+    const maxR = Math.max(...slice);
+    const currR = slice[slice.length - 1];
+    kValues.push(maxR !== minR ? ((currR - minR) / (maxR - minR)) * 100 : 50);
+  }
+  
+  const k = kValues.slice(-kPeriod).reduce((a, b) => a + b, 0) / kPeriod;
+  const d = kValues.slice(-dPeriod - kPeriod + 1, -kPeriod + 1 || undefined).reduce((a, b) => a + b, 0) / dPeriod || k;
+  
+  // Determine signal
+  let signal: TechnicalIndicators['stochRsiSignal'] = 'NEUTRAL';
+  const prevK = kValues[kValues.length - 2] || k;
+  const prevD = kValues.length >= dPeriod + 1 
+    ? kValues.slice(-dPeriod - 1, -1).reduce((a, b) => a + b, 0) / dPeriod 
+    : d;
+  
+  if (k < 20) signal = 'OVERSOLD';
+  else if (k > 80) signal = 'OVERBOUGHT';
+  else if (prevK < prevD && k > d) signal = 'BULLISH_CROSS';
+  else if (prevK > prevD && k < d) signal = 'BEARISH_CROSS';
+  
+  return { k, d, signal };
+}
+
+// Calculate ADX (Average Directional Index)
+function calculateADX(klines: KlineData[], period: number = 14): {
+  adx: number; plusDI: number; minusDI: number; 
+  trend: TechnicalIndicators['adxTrend']; direction: TechnicalIndicators['adxDirection'];
+} {
+  if (klines.length < period + 1) {
+    return { adx: 0, plusDI: 0, minusDI: 0, trend: 'NO_TREND', direction: 'NEUTRAL' };
+  }
+  
+  const plusDM: number[] = [];
+  const minusDM: number[] = [];
+  const tr: number[] = [];
+  
+  for (let i = 1; i < klines.length; i++) {
+    const high = klines[i].high;
+    const low = klines[i].low;
+    const prevHigh = klines[i - 1].high;
+    const prevLow = klines[i - 1].low;
+    const prevClose = klines[i - 1].close;
+    
+    // True Range
+    const trueRange = Math.max(
+      high - low,
+      Math.abs(high - prevClose),
+      Math.abs(low - prevClose)
+    );
+    tr.push(trueRange);
+    
+    // Directional Movement
+    const upMove = high - prevHigh;
+    const downMove = prevLow - low;
+    
+    plusDM.push(upMove > downMove && upMove > 0 ? upMove : 0);
+    minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0);
+  }
+  
+  // Smooth the values with Wilder's smoothing
+  let smoothedTR = tr.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothedPlusDM = plusDM.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothedMinusDM = minusDM.slice(0, period).reduce((a, b) => a + b, 0);
+  
+  const dxValues: number[] = [];
+  
+  for (let i = period; i < tr.length; i++) {
+    smoothedTR = smoothedTR - (smoothedTR / period) + tr[i];
+    smoothedPlusDM = smoothedPlusDM - (smoothedPlusDM / period) + plusDM[i];
+    smoothedMinusDM = smoothedMinusDM - (smoothedMinusDM / period) + minusDM[i];
+    
+    const plusDI = (smoothedPlusDM / smoothedTR) * 100;
+    const minusDI = (smoothedMinusDM / smoothedTR) * 100;
+    
+    const diDiff = Math.abs(plusDI - minusDI);
+    const diSum = plusDI + minusDI;
+    const dx = diSum > 0 ? (diDiff / diSum) * 100 : 0;
+    dxValues.push(dx);
+  }
+  
+  // Calculate ADX as smoothed average of DX
+  let adx = dxValues.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < dxValues.length; i++) {
+    adx = ((adx * (period - 1)) + dxValues[i]) / period;
+  }
+  
+  // Get final +DI and -DI
+  const finalPlusDI = (smoothedPlusDM / smoothedTR) * 100;
+  const finalMinusDI = (smoothedMinusDM / smoothedTR) * 100;
+  
+  // Determine trend strength
+  let trend: TechnicalIndicators['adxTrend'];
+  if (adx >= 50) trend = 'STRONG_TREND';
+  else if (adx >= 25) trend = 'TRENDING';
+  else if (adx >= 15) trend = 'WEAK_TREND';
+  else trend = 'NO_TREND';
+  
+  // Determine direction
+  let direction: TechnicalIndicators['adxDirection'];
+  if (finalPlusDI > finalMinusDI + 5) direction = 'BULLISH';
+  else if (finalMinusDI > finalPlusDI + 5) direction = 'BEARISH';
+  else direction = 'NEUTRAL';
+  
+  return { adx, plusDI: finalPlusDI, minusDI: finalMinusDI, trend, direction };
+}
+
+// Calculate Ichimoku Cloud
+function calculateIchimoku(klines: KlineData[]): {
+  tenkan: number; kijun: number; senkouA: number; senkouB: number; chikou: number;
+  signal: TechnicalIndicators['ichimokuSignal']; cloudPosition: TechnicalIndicators['ichimokuCloudPosition'];
+} {
+  const defaultResult = {
+    tenkan: 0, kijun: 0, senkouA: 0, senkouB: 0, chikou: 0,
+    signal: 'NEUTRAL' as TechnicalIndicators['ichimokuSignal'],
+    cloudPosition: 'IN_CLOUD' as TechnicalIndicators['ichimokuCloudPosition']
+  };
+  
+  if (klines.length < 52) return defaultResult;
+  
+  const currentPrice = klines[klines.length - 1].close;
+  
+  // Tenkan-sen (Conversion Line): (9-period high + 9-period low) / 2
+  const last9 = klines.slice(-9);
+  const tenkan = (Math.max(...last9.map(k => k.high)) + Math.min(...last9.map(k => k.low))) / 2;
+  
+  // Kijun-sen (Base Line): (26-period high + 26-period low) / 2
+  const last26 = klines.slice(-26);
+  const kijun = (Math.max(...last26.map(k => k.high)) + Math.min(...last26.map(k => k.low))) / 2;
+  
+  // Senkou Span A (Leading Span A): (Tenkan + Kijun) / 2, plotted 26 periods ahead
+  const senkouA = (tenkan + kijun) / 2;
+  
+  // Senkou Span B (Leading Span B): (52-period high + 52-period low) / 2, plotted 26 periods ahead
+  const last52 = klines.slice(-52);
+  const senkouB = (Math.max(...last52.map(k => k.high)) + Math.min(...last52.map(k => k.low))) / 2;
+  
+  // Chikou Span (Lagging Span): Current close plotted 26 periods back
+  const chikou = currentPrice;
+  
+  // Determine cloud position
+  const cloudTop = Math.max(senkouA, senkouB);
+  const cloudBottom = Math.min(senkouA, senkouB);
+  
+  let cloudPosition: TechnicalIndicators['ichimokuCloudPosition'];
+  if (currentPrice > cloudTop) cloudPosition = 'ABOVE_CLOUD';
+  else if (currentPrice < cloudBottom) cloudPosition = 'BELOW_CLOUD';
+  else cloudPosition = 'IN_CLOUD';
+  
+  // Determine signal
+  let signal: TechnicalIndicators['ichimokuSignal'] = 'NEUTRAL';
+  const isBullish = tenkan > kijun && currentPrice > cloudTop && senkouA > senkouB;
+  const isBearish = tenkan < kijun && currentPrice < cloudBottom && senkouA < senkouB;
+  
+  if (isBullish) {
+    signal = tenkan > kijun * 1.01 ? 'STRONG_BULLISH' : 'BULLISH';
+  } else if (isBearish) {
+    signal = tenkan < kijun * 0.99 ? 'STRONG_BEARISH' : 'BEARISH';
+  }
+  
+  return { tenkan, kijun, senkouA, senkouB, chikou, signal, cloudPosition };
+}
+
 // Calculate Support/Resistance levels
 function calculateSupportResistance(klines: KlineData[], currentPrice: number): {
   support: number; resistance: number;
@@ -239,7 +454,7 @@ function calculateSupportResistance(klines: KlineData[], currentPrice: number): 
   };
 }
 
-// Calculate overall signal
+// Calculate overall signal with new indicators
 function calculateOverallSignal(indicators: Partial<TechnicalIndicators>): {
   signal: TechnicalIndicators['overallSignal'];
   strength: number;
@@ -253,6 +468,14 @@ function calculateOverallSignal(indicators: Partial<TechnicalIndicators>): {
     else if (indicators.rsi < 40) bullishPoints += 1;
     else if (indicators.rsi > 70) bearishPoints += 2; // Overbought = bearish
     else if (indicators.rsi > 60) bearishPoints += 1;
+  }
+  
+  // Stochastic RSI contribution (NEW)
+  if (indicators.stochRsiSignal) {
+    if (indicators.stochRsiSignal === 'OVERSOLD') bullishPoints += 2;
+    else if (indicators.stochRsiSignal === 'BULLISH_CROSS') bullishPoints += 3;
+    else if (indicators.stochRsiSignal === 'OVERBOUGHT') bearishPoints += 2;
+    else if (indicators.stochRsiSignal === 'BEARISH_CROSS') bearishPoints += 3;
   }
   
   // MACD contribution
@@ -280,6 +503,28 @@ function calculateOverallSignal(indicators: Partial<TechnicalIndicators>): {
     else if (indicators.emaTrend === 'BEARISH') bearishPoints += 2;
   }
   
+  // ADX contribution (NEW) - Trend strength amplifier
+  if (indicators.adxTrend && indicators.adxDirection) {
+    const trendMultiplier = indicators.adxTrend === 'STRONG_TREND' ? 3 : 
+                            indicators.adxTrend === 'TRENDING' ? 2 : 
+                            indicators.adxTrend === 'WEAK_TREND' ? 1 : 0;
+    if (indicators.adxDirection === 'BULLISH') bullishPoints += trendMultiplier;
+    else if (indicators.adxDirection === 'BEARISH') bearishPoints += trendMultiplier;
+  }
+  
+  // Ichimoku contribution (NEW)
+  if (indicators.ichimokuSignal) {
+    if (indicators.ichimokuSignal === 'STRONG_BULLISH') bullishPoints += 4;
+    else if (indicators.ichimokuSignal === 'BULLISH') bullishPoints += 2;
+    else if (indicators.ichimokuSignal === 'STRONG_BEARISH') bearishPoints += 4;
+    else if (indicators.ichimokuSignal === 'BEARISH') bearishPoints += 2;
+  }
+  
+  if (indicators.ichimokuCloudPosition) {
+    if (indicators.ichimokuCloudPosition === 'ABOVE_CLOUD') bullishPoints += 2;
+    else if (indicators.ichimokuCloudPosition === 'BELOW_CLOUD') bearishPoints += 2;
+  }
+  
   // Volume contribution
   if (indicators.volumeSignal === 'HIGH') {
     // High volume amplifies the trend
@@ -297,13 +542,13 @@ function calculateOverallSignal(indicators: Partial<TechnicalIndicators>): {
   
   const totalPoints = bullishPoints + bearishPoints;
   const netScore = bullishPoints - bearishPoints;
-  const strength = totalPoints > 0 ? Math.min(100, Math.abs(netScore) / totalPoints * 100) : 50;
+  const strength = totalPoints > 0 ? Math.min(100, Math.abs(netScore) / totalPoints * 100 + 20) : 50;
   
   let signal: TechnicalIndicators['overallSignal'];
-  if (netScore >= 5) signal = 'STRONG_BUY';
-  else if (netScore >= 2) signal = 'BUY';
-  else if (netScore <= -5) signal = 'STRONG_SELL';
-  else if (netScore <= -2) signal = 'SELL';
+  if (netScore >= 8) signal = 'STRONG_BUY';
+  else if (netScore >= 3) signal = 'BUY';
+  else if (netScore <= -8) signal = 'STRONG_SELL';
+  else if (netScore <= -3) signal = 'SELL';
   else signal = 'NEUTRAL';
   
   return { signal, strength: Math.round(strength) };
@@ -420,29 +665,63 @@ export function useTechnicalIndicators(options: { enabled?: boolean; intervalMs?
             // Calculate Support/Resistance
             const sr = calculateSupportResistance(klines, currentPrice);
 
+            // Calculate Stochastic RSI (NEW)
+            const stochRsi = calculateStochRSI(closes);
+
+            // Calculate ADX (NEW)
+            const adxData = calculateADX(klines);
+
+            // Calculate Ichimoku (NEW)
+            const ichimoku = calculateIchimoku(klines);
+
             // Build indicators object
             const indicatorData: Partial<TechnicalIndicators> = {
               rsi,
               rsiSignal,
+              // Stochastic RSI
+              stochRsiK: stochRsi.k,
+              stochRsiD: stochRsi.d,
+              stochRsiSignal: stochRsi.signal,
+              // MACD
               macd: macdData.macd,
               macdSignal: macdData.signal,
               macdHistogram: macdData.histogram,
               macdTrend,
+              // Bollinger
               bollingerUpper: bb.upper,
               bollingerMiddle: bb.middle,
               bollingerLower: bb.lower,
               bollingerPosition,
               bollingerWidth: bb.width,
+              // EMAs
               ema9,
               ema21,
               ema50,
               emaTrend,
+              // ADX
+              adx: adxData.adx,
+              plusDI: adxData.plusDI,
+              minusDI: adxData.minusDI,
+              adxTrend: adxData.trend,
+              adxDirection: adxData.direction,
+              // Ichimoku
+              ichimokuTenkan: ichimoku.tenkan,
+              ichimokuKijun: ichimoku.kijun,
+              ichimokuSenkouA: ichimoku.senkouA,
+              ichimokuSenkouB: ichimoku.senkouB,
+              ichimokuChikou: ichimoku.chikou,
+              ichimokuSignal: ichimoku.signal,
+              ichimokuCloudPosition: ichimoku.cloudPosition,
+              // Volume
               volumeRatio,
               volumeSignal,
+              // ATR
               atr,
               atrPercent,
+              // Momentum
               momentum,
               momentumSignal,
+              // Support/Resistance
               nearestSupport: sr.support,
               nearestResistance: sr.resistance,
             };

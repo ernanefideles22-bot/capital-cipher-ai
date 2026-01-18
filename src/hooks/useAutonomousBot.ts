@@ -74,27 +74,53 @@ interface TradingRules {
 export interface TechnicalIndicatorsPayload {
   rsi: number;
   rsiSignal: string;
+  // Stochastic RSI
+  stochRsiK?: number;
+  stochRsiD?: number;
+  stochRsiSignal?: string;
+  // MACD
   macd: number;
   macdSignal: number;
   macdHistogram: number;
   macdTrend: string;
+  // Bollinger
   bollingerUpper: number;
   bollingerMiddle: number;
   bollingerLower: number;
   bollingerPosition: string;
   bollingerWidth: number;
+  // EMAs
   ema9: number;
   ema21: number;
   ema50: number;
   emaTrend: string;
+  // ADX
+  adx?: number;
+  plusDI?: number;
+  minusDI?: number;
+  adxTrend?: string;
+  adxDirection?: string;
+  // Ichimoku
+  ichimokuTenkan?: number;
+  ichimokuKijun?: number;
+  ichimokuSenkouA?: number;
+  ichimokuSenkouB?: number;
+  ichimokuChikou?: number;
+  ichimokuSignal?: string;
+  ichimokuCloudPosition?: string;
+  // Volume
   volumeRatio: number;
   volumeSignal: string;
+  // ATR
   atr: number;
   atrPercent: number;
+  // Momentum
   momentum: number;
   momentumSignal: string;
+  // Support/Resistance
   nearestSupport: number;
   nearestResistance: number;
+  // Overall
   overallSignal: string;
   signalStrength: number;
 }
@@ -277,7 +303,7 @@ export const useAutonomousBot = ({
 
   // Fallback local analysis using technical indicators when AI credits are exhausted
   const performLocalAnalysis = useCallback((): MultiPairAnalysisResult => {
-    addLog('INFO', '🔧 Executando análise técnica local (fallback)...');
+    addLog('INFO', '🔧 Executando análise técnica avançada local (Stoch RSI, ADX, Ichimoku)...');
     
     const opportunities: BotOpportunity[] = [];
     
@@ -289,85 +315,197 @@ export const useAutonomousBot = ({
       let confidence = 50;
       let recommendation: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
       const reasons: string[] = [];
+      let bullishSignals = 0;
+      let bearishSignals = 0;
       
-      // RSI Analysis
+      // === RSI Analysis ===
       if (indicators.rsi < 30) {
-        score += 15;
-        confidence += 10;
+        score += 12;
+        confidence += 8;
+        bullishSignals++;
         reasons.push(`RSI oversold (${indicators.rsi.toFixed(1)})`);
       } else if (indicators.rsi > 70) {
-        score += 15;
-        confidence += 10;
+        score += 12;
+        confidence += 8;
+        bearishSignals++;
         reasons.push(`RSI overbought (${indicators.rsi.toFixed(1)})`);
       }
       
-      // MACD Analysis
+      // === Stochastic RSI Analysis (NEW) ===
+      if (indicators.stochRsiSignal) {
+        if (indicators.stochRsiSignal === 'OVERSOLD') {
+          score += 10;
+          confidence += 6;
+          bullishSignals++;
+          reasons.push(`Stoch RSI oversold (${indicators.stochRsiK?.toFixed(1)})`);
+        } else if (indicators.stochRsiSignal === 'OVERBOUGHT') {
+          score += 10;
+          confidence += 6;
+          bearishSignals++;
+          reasons.push(`Stoch RSI overbought (${indicators.stochRsiK?.toFixed(1)})`);
+        } else if (indicators.stochRsiSignal === 'BULLISH_CROSS') {
+          score += 15;
+          confidence += 10;
+          bullishSignals += 2;
+          reasons.push('Stoch RSI bullish cross');
+        } else if (indicators.stochRsiSignal === 'BEARISH_CROSS') {
+          score += 15;
+          confidence += 10;
+          bearishSignals += 2;
+          reasons.push('Stoch RSI bearish cross');
+        }
+      }
+      
+      // === MACD Analysis ===
       if (indicators.macdHistogram > 0 && indicators.macdTrend === 'BULLISH') {
-        score += 10;
+        score += 8;
         confidence += 5;
+        bullishSignals++;
         reasons.push('MACD bullish');
       } else if (indicators.macdHistogram < 0 && indicators.macdTrend === 'BEARISH') {
-        score += 10;
+        score += 8;
         confidence += 5;
+        bearishSignals++;
         reasons.push('MACD bearish');
       }
       
-      // EMA Trend
+      // === EMA Trend ===
       if (indicators.emaTrend === 'STRONG_BULLISH') {
         score += 10;
-        confidence += 5;
-        reasons.push('Strong uptrend');
+        confidence += 6;
+        bullishSignals++;
+        reasons.push('Strong uptrend (EMAs)');
       } else if (indicators.emaTrend === 'STRONG_BEARISH') {
         score += 10;
-        confidence += 5;
-        reasons.push('Strong downtrend');
+        confidence += 6;
+        bearishSignals++;
+        reasons.push('Strong downtrend (EMAs)');
       }
       
-      // Bollinger Position
+      // === ADX Analysis (NEW) ===
+      if (indicators.adxTrend && indicators.adxDirection) {
+        const hasStrongTrend = indicators.adxTrend === 'STRONG_TREND' || indicators.adxTrend === 'TRENDING';
+        if (hasStrongTrend) {
+          if (indicators.adxDirection === 'BULLISH') {
+            score += 12;
+            confidence += 8;
+            bullishSignals += 2;
+            reasons.push(`ADX strong bullish (${indicators.adx?.toFixed(1)})`);
+          } else if (indicators.adxDirection === 'BEARISH') {
+            score += 12;
+            confidence += 8;
+            bearishSignals += 2;
+            reasons.push(`ADX strong bearish (${indicators.adx?.toFixed(1)})`);
+          }
+        } else if (indicators.adxTrend === 'NO_TREND') {
+          // Weak trend reduces confidence
+          confidence -= 5;
+        }
+      }
+      
+      // === Ichimoku Cloud Analysis (NEW) ===
+      if (indicators.ichimokuSignal) {
+        if (indicators.ichimokuSignal === 'STRONG_BULLISH') {
+          score += 15;
+          confidence += 10;
+          bullishSignals += 2;
+          reasons.push('Ichimoku strong bullish');
+        } else if (indicators.ichimokuSignal === 'BULLISH') {
+          score += 10;
+          confidence += 6;
+          bullishSignals++;
+          reasons.push('Ichimoku bullish');
+        } else if (indicators.ichimokuSignal === 'STRONG_BEARISH') {
+          score += 15;
+          confidence += 10;
+          bearishSignals += 2;
+          reasons.push('Ichimoku strong bearish');
+        } else if (indicators.ichimokuSignal === 'BEARISH') {
+          score += 10;
+          confidence += 6;
+          bearishSignals++;
+          reasons.push('Ichimoku bearish');
+        }
+      }
+      
+      // Ichimoku Cloud Position
+      if (indicators.ichimokuCloudPosition) {
+        if (indicators.ichimokuCloudPosition === 'ABOVE_CLOUD') {
+          score += 8;
+          bullishSignals++;
+          reasons.push('Price above Ichimoku cloud');
+        } else if (indicators.ichimokuCloudPosition === 'BELOW_CLOUD') {
+          score += 8;
+          bearishSignals++;
+          reasons.push('Price below Ichimoku cloud');
+        }
+      }
+      
+      // === Bollinger Position ===
       if (indicators.bollingerPosition === 'BELOW_LOWER') {
-        score += 10;
+        score += 8;
+        bullishSignals++;
         reasons.push('Below Bollinger lower');
       } else if (indicators.bollingerPosition === 'ABOVE_UPPER') {
-        score += 10;
+        score += 8;
+        bearishSignals++;
         reasons.push('Above Bollinger upper');
       }
       
-      // Volume confirmation
+      // === Volume confirmation ===
       if (indicators.volumeRatio > 1.5) {
         score += 5;
         confidence += 5;
         reasons.push(`High volume (${indicators.volumeRatio.toFixed(1)}x)`);
       }
       
-      // Signal strength boost
+      // === Signal strength boost ===
       if (indicators.signalStrength > 70) {
-        score += 10;
-        confidence += 10;
+        score += 8;
+        confidence += 8;
       }
       
-      // Determine recommendation
-      const isBullish = indicators.rsi < 40 && 
-        (indicators.macdTrend === 'BULLISH' || indicators.emaTrend?.includes('BULLISH'));
-      const isBearish = indicators.rsi > 60 && 
-        (indicators.macdTrend === 'BEARISH' || indicators.emaTrend?.includes('BEARISH'));
+      // === Determine recommendation based on signal consensus ===
+      const netSignal = bullishSignals - bearishSignals;
+      const hasConfluence = bullishSignals >= 3 || bearishSignals >= 3;
       
-      if (isBullish && score >= 65) {
+      if (netSignal >= 2 && score >= 65 && hasConfluence) {
         recommendation = 'BUY';
-      } else if (isBearish && score >= 65) {
+      } else if (netSignal <= -2 && score >= 65 && hasConfluence) {
+        recommendation = 'SELL';
+      } else if (netSignal >= 3) {
+        recommendation = 'BUY';
+      } else if (netSignal <= -3) {
         recommendation = 'SELL';
       }
       
-      // Calculate entry, SL, TP
+      // Bonus for strong confluence
+      if (hasConfluence) {
+        confidence += 10;
+        score += 5;
+      }
+      
+      // === Calculate entry, SL, TP ===
       const atr = indicators.atr || data.price * 0.02;
       const entryPrice = data.price;
       let stopLoss: number;
       let takeProfit: number;
       
+      // Use Ichimoku levels if available for better S/R
+      const kumoTop = Math.max(indicators.ichimokuSenkouA || 0, indicators.ichimokuSenkouB || 0);
+      const kumoBottom = Math.min(indicators.ichimokuSenkouA || Infinity, indicators.ichimokuSenkouB || Infinity);
+      
       if (recommendation === 'BUY') {
-        stopLoss = Math.max(indicators.nearestSupport || (entryPrice - atr * 2), entryPrice - atr * 2);
+        // Use Ichimoku Kijun or support as SL
+        const ichimokuSL = indicators.ichimokuKijun || kumoBottom;
+        const technicalSL = indicators.nearestSupport || (entryPrice - atr * 2);
+        stopLoss = Math.max(Math.min(ichimokuSL, technicalSL), entryPrice - atr * 2.5);
         takeProfit = indicators.nearestResistance || (entryPrice + atr * 3);
       } else if (recommendation === 'SELL') {
-        stopLoss = Math.min(indicators.nearestResistance || (entryPrice + atr * 2), entryPrice + atr * 2);
+        // Use Ichimoku Kijun or resistance as SL
+        const ichimokuSL = indicators.ichimokuKijun || kumoTop;
+        const technicalSL = indicators.nearestResistance || (entryPrice + atr * 2);
+        stopLoss = Math.min(Math.max(ichimokuSL, technicalSL), entryPrice + atr * 2.5);
         takeProfit = indicators.nearestSupport || (entryPrice - atr * 3);
       } else {
         stopLoss = entryPrice - atr * 1.5;
@@ -376,26 +514,41 @@ export const useAutonomousBot = ({
       
       const riskReward = Math.abs(takeProfit - entryPrice) / Math.abs(entryPrice - stopLoss);
       
-      // Only add if score is high enough
+      // === Determine strategy based on indicators ===
+      let suggestedStrategy: 'SCALP' | 'DAYTRADE' | 'SWING' = 'DAYTRADE';
+      let professionalStrategy: BotOpportunity['professionalStrategy'] = 'MOMENTUM';
+      
+      if (indicators.adxTrend === 'STRONG_TREND') {
+        professionalStrategy = 'BREAKOUT';
+        suggestedStrategy = 'SWING';
+      } else if (indicators.ichimokuSignal?.includes('STRONG')) {
+        professionalStrategy = 'INSTITUTIONAL_FLOW';
+        suggestedStrategy = 'SWING';
+      } else if (indicators.stochRsiSignal?.includes('CROSS')) {
+        professionalStrategy = 'MOMENTUM';
+        suggestedStrategy = 'SCALP';
+      }
+      
+      // Only add if score is high enough and we have a recommendation
       if (score >= 60 && recommendation !== 'HOLD') {
         opportunities.push({
           symbol,
           recommendation,
-          confidence: Math.min(95, confidence),
+          confidence: Math.min(95, Math.max(50, confidence)),
           score: Math.min(100, score),
-          reasoning: reasons.join(', ') || 'Technical analysis',
+          reasoning: reasons.slice(0, 5).join(', ') || 'Technical analysis',
           entryPrice,
           stopLoss,
           takeProfit,
           riskRewardRatio: riskReward,
-          suggestedStrategy: 'DAYTRADE',
-          professionalStrategy: 'MOMENTUM',
+          suggestedStrategy,
+          professionalStrategy,
         });
       }
     });
     
-    // Sort by score
-    opportunities.sort((a, b) => b.score - a.score);
+    // Sort by score * confidence for best opportunities
+    opportunities.sort((a, b) => (b.score * b.confidence) - (a.score * a.confidence));
     const topOpps = opportunities.slice(0, 5);
     
     const result: MultiPairAnalysisResult = {
@@ -403,17 +556,17 @@ export const useAutonomousBot = ({
       timestamp: new Date().toISOString(),
       pairsAnalyzed: Object.keys(marketData).length,
       bestOpportunities: topOpps,
-      marketOverview: `Análise técnica local: ${topOpps.length} oportunidades encontradas`,
+      marketOverview: `Análise técnica avançada: ${topOpps.length} oportunidades (Stoch RSI + ADX + Ichimoku)`,
       topPick: topOpps.length > 0 ? {
         symbol: topOpps[0].symbol,
         action: topOpps[0].recommendation as 'BUY' | 'SELL',
         urgency: topOpps[0].score >= 80 ? 'high' : topOpps[0].score >= 70 ? 'medium' : 'low',
       } : null,
       neuralEnabled: false,
-      neuralInsights: 'Usando análise técnica local (AI credits esgotados)',
+      neuralInsights: 'Usando análise técnica avançada local (Stochastic RSI, ADX, Ichimoku Cloud)',
     };
     
-    addLog('AI', `📊 Análise local: ${topOpps.length} oportunidades (${topOpps.map(o => o.symbol).join(', ')})`);
+    addLog('AI', `📊 Análise local avançada: ${topOpps.length} oportunidades (${topOpps.map(o => `${o.symbol}:${o.score}`).join(', ')})`);
     
     return result;
   }, [marketData, technicalIndicators, addLog]);
