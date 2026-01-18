@@ -88,6 +88,20 @@ const Index = () => {
     }
   }, [isRealMode, realData, botStats.status, demoToggleBot]);
 
+  // Handle bot status change from TradingAIPanel (e.g., auto-stop by rules)
+  const handleBotStatusChange = useCallback((running: boolean, reason?: string) => {
+    if (isRealMode) {
+      realData.setBotStatus(running ? 'RUNNING' : 'PAUSED');
+    } else {
+      if (running !== (botStats.status === 'RUNNING')) {
+        demoToggleBot();
+      }
+    }
+    if (reason) {
+      toast.warning(`Bot pausado: ${reason}`);
+    }
+  }, [isRealMode, realData, botStats.status, demoToggleBot]);
+
   // Callback to save real trades when executed via Trading AI
   const handleRealTradeExecuted = useCallback(async (tradeResult: TradeResult) => {
     if (!isRealMode || !user || !tradeResult.executed || !tradeResult.details) {
@@ -291,7 +305,13 @@ const Index = () => {
             <TradingViewChart symbol="BTCUSDT" height={380} />
           </div>
           <div className="flex flex-col gap-3">
-            <TradingAIPanel onTradeExecuted={isRealMode ? handleRealTradeExecuted : undefined} />
+            <TradingAIPanel 
+              onTradeExecuted={isRealMode ? handleRealTradeExecuted : undefined}
+              externalRunning={botStats.status === 'RUNNING'}
+              onBotStatusChange={handleBotStatusChange}
+              currentDrawdown={botStats.maxDrawdown}
+              dailyPnL={botStats.dailyPnL}
+            />
             <DrawdownGauge stats={botStats} config={config} />
           </div>
         </section>

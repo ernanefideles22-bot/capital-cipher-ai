@@ -25,21 +25,42 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface TradingAIPanelProps {
   onTradeExecuted?: OnTradeExecutedCallback;
+  externalRunning?: boolean;
+  onBotStatusChange?: (running: boolean, reason?: string) => void;
+  currentDrawdown?: number;
+  dailyPnL?: number;
 }
 
-export const TradingAIPanel = ({ onTradeExecuted }: TradingAIPanelProps) => {
+export const TradingAIPanel = ({ 
+  onTradeExecuted, 
+  externalRunning,
+  onBotStatusChange,
+  currentDrawdown = 0,
+  dailyPnL = 0,
+}: TradingAIPanelProps) => {
+  const handleBotStopped = (reason: string) => {
+    onBotStatusChange?.(false, reason);
+  };
+
   const {
     loading,
     error,
     config,
     isRunning,
+    stopReason,
     lastAnalysis,
     logs,
     analyze,
     startAutoTrading,
     stopAutoTrading,
     updateConfig,
-  } = useTradingAI({ onTradeExecuted });
+  } = useTradingAI({ 
+    onTradeExecuted,
+    onBotStopped: handleBotStopped,
+    externalRunning,
+    currentDrawdown,
+    dailyPnL,
+  });
 
   const [showSettings, setShowSettings] = useState(false);
 
@@ -97,7 +118,7 @@ export const TradingAIPanel = ({ onTradeExecuted }: TradingAIPanelProps) => {
             </Button>
           ) : (
             <Button 
-              onClick={stopAutoTrading} 
+              onClick={() => stopAutoTrading()} 
               variant="destructive"
               className="flex-1 gap-2"
             >
@@ -170,6 +191,20 @@ export const TradingAIPanel = ({ onTradeExecuted }: TradingAIPanelProps) => {
 
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
+                <Label>Perda Diária Máx</Label>
+                <span className="font-mono">${config.maxDailyLoss}</span>
+              </div>
+              <Slider
+                value={[config.maxDailyLoss]}
+                onValueChange={([value]) => updateConfig({ maxDailyLoss: value })}
+                min={100}
+                max={2000}
+                step={50}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
                 <Label>Intervalo Análise</Label>
                 <span className="font-mono">{config.intervalSeconds}s</span>
               </div>
@@ -181,6 +216,13 @@ export const TradingAIPanel = ({ onTradeExecuted }: TradingAIPanelProps) => {
                 step={10}
               />
             </div>
+
+            {stopReason && (
+              <div className="text-xs text-warning bg-warning/10 p-2 rounded flex items-center gap-2">
+                <AlertTriangle className="h-3 w-3" />
+                Última parada: {stopReason}
+              </div>
+            )}
           </div>
         )}
 

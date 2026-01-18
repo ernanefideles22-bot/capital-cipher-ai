@@ -58,6 +58,7 @@ export interface TradingConfig {
   leverage: number;
   positionSize: number;
   maxDrawdown: number;
+  maxDailyLoss: number;
   autoTrade: boolean;
   symbols: string[];
   intervalSeconds: number;
@@ -66,10 +67,14 @@ export interface TradingConfig {
 // Callback for when a trade is executed
 export type OnTradeExecutedCallback = (trade: TradeResult) => Promise<void>;
 
+// Callback for when bot is stopped
+export type OnBotStoppedCallback = (reason: string) => void;
+
 const DEFAULT_CONFIG: TradingConfig = {
   leverage: 10,
   positionSize: 5,
   maxDrawdown: 10,
+  maxDailyLoss: 500, // USD
   autoTrade: false,
   symbols: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
   intervalSeconds: 60,
@@ -77,14 +82,19 @@ const DEFAULT_CONFIG: TradingConfig = {
 
 interface UseTradingAIOptions {
   onTradeExecuted?: OnTradeExecutedCallback;
+  onBotStopped?: OnBotStoppedCallback;
+  externalRunning?: boolean;
+  currentDrawdown?: number;
+  dailyPnL?: number;
 }
 
 export function useTradingAI(options: UseTradingAIOptions = {}) {
-  const { onTradeExecuted } = options;
+  const { onTradeExecuted, onBotStopped, externalRunning, currentDrawdown = 0, dailyPnL = 0 } = options;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<TradingConfig>(DEFAULT_CONFIG);
   const [isRunning, setIsRunning] = useState(false);
+  const [stopReason, setStopReason] = useState<string | null>(null);
   const [lastAnalysis, setLastAnalysis] = useState<{
     symbol: string;
     indicators: MarketIndicators | null;
@@ -101,6 +111,44 @@ export function useTradingAI(options: UseTradingAIOptions = {}) {
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
     setLogs(prev => [...prev.slice(-99), { time: new Date(), message, type }]);
   }, []);
+
+  // Check rules and stop bot if necessary
+  const checkStopRules = useCallback(() => {
+    // Check max drawdown rule
+    if (currentDrawdown >= config.maxDrawdown) {
+      const reason = `Drawdown máximo atingido (${currentDrawdown.toFixed(1)}% >= ${config.maxDrawdown}%)`;
+      return reason;
+    }
+
+    // Check max daily loss rule
+    if (dailyPnL <= -config.maxDailyLoss) {
+      const reason = `Perda diária máxima atingida ($${Math.abs(dailyPnL).toFixed(2)} >= $${config.maxDailyLoss})`;
+      return reason;
+    }
+
+    return null;
+  }, [currentDrawdown, dailyPnL, config.maxDrawdown, config.maxDailyLoss]);
+
+  // Auto-stop when rules are violated
+  useEffect(() => {
+    if (isRunning) {
+      const reason = checkStopRules();
+      if (reason) {
+        stopAutoTrading(reason);
+      }
+    }
+  }, [isRunning, currentDrawdown, dailyPnL]);
+
+  // Sync with external running state
+  useEffect(() => {
+    if (externalRunning !== undefined && externalRunning !== isRunning) {
+      if (externalRunning) {
+        startAutoTrading();
+      } else {
+        stopAutoTrading('Parado externamente');
+      }
+    }
+  }, [externalRunning]);
 
   const analyze = useCallback(async (symbol: string): Promise<{
     indicators: MarketIndicators | null;
@@ -240,15 +288,22 @@ export function useTradingAI(options: UseTradingAIOptions = {}) {
     intervalRef.current = setInterval(runCycle, config.intervalSeconds * 1000);
   }, [isRunning, config, autoTrade, analyze, addLog]);
 
-  const stopAutoTrading = useCallback(() => {
+  const stopAutoTrading = useCallback((reason?: string) => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
     setIsRunning(false);
-    addLog('🛑 Bot de trading parado', 'warning');
-    toast.info('Bot de trading parado');
-  }, [addLog]);
+    const stopMsg = reason || 'Parado pelo usuário';
+    setStopReason(stopMsg);
+    addLog(`🛑 Bot de trading parado: ${stopMsg}`, 'warning');
+    toast.info(`Bot parado: ${stopMsg}`);
+    
+    // Notify external callback
+    if (onBotStopped && reason) {
+      onBotStopped(reason);
+    }
+  }, [addLog, onBotStopped]);
 
   const updateConfig = useCallback((updates: Partial<TradingConfig>) => {
     setConfig(prev => ({ ...prev, ...updates }));
@@ -269,6 +324,7 @@ export function useTradingAI(options: UseTradingAIOptions = {}) {
     error,
     config,
     isRunning,
+    stopReason,
     lastAnalysis,
     tradeHistory,
     logs,
