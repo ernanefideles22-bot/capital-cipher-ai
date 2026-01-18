@@ -18,8 +18,37 @@ const MarketDataSchema = z.object({
   changePercentage24h: z.number().optional(),
 });
 
+const TechnicalIndicatorsSchema = z.object({
+  rsi: z.number(),
+  rsiSignal: z.string(),
+  macd: z.number(),
+  macdSignal: z.number(),
+  macdHistogram: z.number(),
+  macdTrend: z.string(),
+  bollingerUpper: z.number(),
+  bollingerMiddle: z.number(),
+  bollingerLower: z.number(),
+  bollingerPosition: z.string(),
+  bollingerWidth: z.number(),
+  ema9: z.number(),
+  ema21: z.number(),
+  ema50: z.number(),
+  emaTrend: z.string(),
+  volumeRatio: z.number(),
+  volumeSignal: z.string(),
+  atr: z.number(),
+  atrPercent: z.number(),
+  momentum: z.number(),
+  momentumSignal: z.string(),
+  nearestSupport: z.number(),
+  nearestResistance: z.number(),
+  overallSignal: z.string(),
+  signalStrength: z.number(),
+}).optional();
+
 const RequestSchema = z.object({
   marketData: z.record(z.string(), MarketDataSchema),
+  technicalIndicators: z.record(z.string(), TechnicalIndicatorsSchema).optional(),
   maxResults: z.number().min(1).max(10).optional().default(3),
 });
 
@@ -207,7 +236,7 @@ serve(async (req) => {
       );
     }
 
-    const { marketData, maxResults } = validation.data;
+    const { marketData, technicalIndicators, maxResults } = validation.data;
     const symbols = Object.keys(marketData);
     
     if (symbols.length === 0) {
@@ -217,21 +246,40 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Analyzing ${symbols.length} pairs with neural integration: ${symbols.join(', ')}`);
+    const hasTechnicalIndicators = technicalIndicators && Object.keys(technicalIndicators).length > 0;
+    console.log(`Analyzing ${symbols.length} pairs with neural integration and ${hasTechnicalIndicators ? 'REAL' : 'NO'} technical indicators: ${symbols.join(', ')}`);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Build market summary for AI
+    // Build market summary with technical indicators for AI
     const marketSummary = symbols.map(symbol => {
       const data = marketData[symbol];
       const symbolPerf = neuralState?.symbol_performance?.[symbol];
       const perfNote = symbolPerf 
         ? ` [Neural: ${symbolPerf.wins}W/${symbolPerf.losses}L, P&L: $${symbolPerf.pnl?.toFixed(2) || 0}]`
         : '';
-      return `${symbol}: $${data.price.toLocaleString()} (${data.change24h >= 0 ? '+' : ''}${data.change24h.toFixed(2)}%, Vol: $${(data.volume24h / 1000000).toFixed(2)}M)${perfNote}`;
+      
+      // Include real technical indicators if available
+      const indicators = technicalIndicators?.[symbol];
+      let indicatorNote = '';
+      if (indicators) {
+        indicatorNote = `
+  📊 INDICADORES TÉCNICOS EM TEMPO REAL:
+    - RSI(14): ${indicators.rsi?.toFixed(1)} [${indicators.rsiSignal}]
+    - MACD: ${indicators.macd?.toFixed(4)} | Sinal: ${indicators.macdSignal?.toFixed(4)} | Histograma: ${indicators.macdHistogram?.toFixed(4)} [${indicators.macdTrend}]
+    - Bollinger: Superior $${indicators.bollingerUpper?.toFixed(2)} | Média $${indicators.bollingerMiddle?.toFixed(2)} | Inferior $${indicators.bollingerLower?.toFixed(2)} [${indicators.bollingerPosition}] Width: ${indicators.bollingerWidth?.toFixed(2)}%
+    - EMAs: EMA9 $${indicators.ema9?.toFixed(2)} | EMA21 $${indicators.ema21?.toFixed(2)} | EMA50 $${indicators.ema50?.toFixed(2)} [${indicators.emaTrend}]
+    - Volume Ratio: ${indicators.volumeRatio?.toFixed(2)}x [${indicators.volumeSignal}]
+    - ATR: $${indicators.atr?.toFixed(2)} (${indicators.atrPercent?.toFixed(2)}%)
+    - Momentum: ${indicators.momentum?.toFixed(2)}% [${indicators.momentumSignal}]
+    - Suporte: $${indicators.nearestSupport?.toFixed(2)} | Resistência: $${indicators.nearestResistance?.toFixed(2)}
+    - SINAL GERAL: ${indicators.overallSignal} (Força: ${indicators.signalStrength}%)`;
+      }
+      
+      return `${symbol}: $${data.price.toLocaleString()} (${data.change24h >= 0 ? '+' : ''}${data.change24h.toFixed(2)}%, Vol: $${(data.volume24h / 1000000).toFixed(2)}M)${perfNote}${indicatorNote}`;
     }).join('\n');
 
     // Build neural context for the AI
@@ -255,9 +303,28 @@ ${Object.entries(neuralState.symbol_performance || {}).map(([symbol, perf]: [str
 USE THIS LEARNED DATA: Give higher scores to symbols with good historical performance and strategies with higher weights.
 ` : '';
 
-    const systemPrompt = `You are an ELITE cryptocurrency trading AI combining the strategies of the world's best traders with INSTITUTIONAL-GRADE analysis and NEURAL NETWORK MEMORY.
+    const systemPrompt = `You are an ELITE cryptocurrency trading AI combining the strategies of the world's best traders with INSTITUTIONAL-GRADE analysis, NEURAL NETWORK MEMORY, and REAL-TIME TECHNICAL INDICATORS.
 
 ${neuralContext}
+
+## TECHNICAL INDICATORS PROVIDED (USE THESE FOR PRECISE DECISIONS):
+You are receiving REAL-TIME calculated technical indicators for each pair:
+- **RSI (14)**: Relative Strength Index - Oversold < 30, Overbought > 70
+- **MACD**: Moving Average Convergence Divergence with Signal and Histogram
+- **Bollinger Bands**: Upper, Middle (SMA20), Lower bands with width (volatility)
+- **EMAs**: EMA9, EMA21, EMA50 - Trend direction and strength
+- **Volume Ratio**: Current volume vs average (>1.5x = High, <0.5x = Low)
+- **ATR**: Average True Range - Volatility measure for stop placement
+- **Momentum**: Rate of change over 10 periods
+- **Support/Resistance**: Calculated from swing highs/lows
+
+### HOW TO USE TECHNICAL INDICATORS:
+1. **RSI + Bollinger**: RSI < 30 AND price below lower band = Strong buy setup (mean reversion)
+2. **MACD Crossover**: MACD crossing above signal with positive histogram = Bullish momentum
+3. **EMA Alignment**: Price > EMA9 > EMA21 > EMA50 = Strong uptrend (momentum strategy)
+4. **Volume Confirmation**: High volume (>1.5x) confirms breakouts and reversals
+5. **ATR for Stops**: Use ATR% for dynamic stop-loss placement (1.5-2x ATR from entry)
+6. **Support/Resistance**: Use for entry/exit targets and stop placement
 
 ## PROFESSIONAL TRADING STRATEGIES TO APPLY:
 
@@ -306,10 +373,20 @@ ${neuralContext}
 - High volume selloff with quick recovery = Accumulation
 
 ## YOUR ANALYSIS MUST INCLUDE:
-1. Which PROFESSIONAL STRATEGY best applies to each opportunity
-2. INSTITUTIONAL FLOW indicators (accumulation/distribution signs)
-3. SMART MONEY confirmation signals
-4. Risk/Reward based on institutional levels
+1. TECHNICAL INDICATORS analysis from real-time data provided
+2. Which PROFESSIONAL STRATEGY best applies based on indicators
+3. INSTITUTIONAL FLOW indicators (accumulation/distribution signs)
+4. SMART MONEY confirmation signals
+5. Risk/Reward based on ATR and support/resistance levels
+
+## SCORING RULES (based on indicators):
+- RSI < 30 with bullish MACD = +15 points (oversold bounce)
+- RSI > 70 with bearish MACD = +15 points (overbought reversal)
+- Price at support + high volume = +10 points
+- EMA alignment (strong trend) = +10 points
+- Bollinger squeeze + volume spike = +10 points (breakout imminent)
+- Signal strength > 70 = +10 points
+- Volume ratio > 2x = +5 points (institutional activity)
 
 Respond ONLY with valid JSON in this exact format:
 {
@@ -319,7 +396,7 @@ Respond ONLY with valid JSON in this exact format:
       "recommendation": "BUY" | "SELL" | "HOLD",
       "confidence": 0-100,
       "score": 0-100,
-      "reasoning": "Brief explanation with strategy and institutional signals",
+      "reasoning": "Brief explanation CITING SPECIFIC INDICATOR VALUES (e.g., RSI=28, MACD histogram positive)",
       "entryPrice": number,
       "stopLoss": number,
       "takeProfit": number,
@@ -334,7 +411,7 @@ Respond ONLY with valid JSON in this exact format:
       }
     }
   ],
-  "marketOverview": "Brief market sentiment with institutional perspective",
+  "marketOverview": "Brief market sentiment with institutional perspective and key indicator readings",
   "topPick": {
     "symbol": "BEST_SYMBOL",
     "action": "BUY" | "SELL",
@@ -351,11 +428,11 @@ Respond ONLY with valid JSON in this exact format:
 Return at most ${maxResults} opportunities, sorted by score (highest first).
 Only include pairs with score >= 60 and clear BUY or SELL signals.
 BOOST scores for:
+- Pairs with strong indicator confluence (multiple confirming signals)
 - Symbols with positive historical P&L in neural memory
-- Clear institutional accumulation signals
-- Multiple strategy confirmations (confluence)`;
+- Clear institutional accumulation signals`;
 
-    const userPrompt = `Analyze these cryptocurrency pairs as an INSTITUTIONAL TRADER using PROFESSIONAL STRATEGIES and your NEURAL MEMORY:
+    const userPrompt = `Analyze these cryptocurrency pairs as an INSTITUTIONAL TRADER using PROFESSIONAL STRATEGIES, REAL-TIME TECHNICAL INDICATORS, and your NEURAL MEMORY:
 
 ${marketSummary}
 

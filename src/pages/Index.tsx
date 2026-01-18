@@ -144,6 +144,7 @@ const Index = () => {
 
   const autonomousBot = useAutonomousBot({
     marketData,
+    technicalIndicators: technicalIndicators as Record<string, any>,
     onTradeOpened: handleBotTradeOpened,
     onDecisionMade: handleBotDecision,
     onLog: handleBotLog,
