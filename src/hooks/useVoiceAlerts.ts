@@ -5,6 +5,7 @@ interface VoiceAlertOptions {
   volume: number;
   rate: number;
   pitch: number;
+  useElevenLabs: boolean;
 }
 
 const defaultOptions: VoiceAlertOptions = {
@@ -12,6 +13,7 @@ const defaultOptions: VoiceAlertOptions = {
   volume: 1,
   rate: 1,
   pitch: 1,
+  useElevenLabs: true, // Use ElevenLabs by default
 };
 
 // Audio context for playing beep sounds
@@ -61,56 +63,121 @@ export const playVoiceToggleSound = (enabled: boolean) => {
   }
 };
 
+// ElevenLabs TTS function
+const speakWithElevenLabs = async (text: string, volume: number = 1): Promise<boolean> => {
+  try {
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-tts`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ text }),
+      }
+    );
+
+    if (!response.ok) {
+      console.error('ElevenLabs TTS failed:', response.status);
+      return false;
+    }
+
+    const data = await response.json();
+    
+    if (data.audioContent) {
+      // Play audio using data URI
+      const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
+      const audio = new Audio(audioUrl);
+      audio.volume = volume;
+      await audio.play();
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('ElevenLabs TTS error:', error);
+    return false;
+  }
+};
+
+// Browser TTS fallback
+const speakWithBrowser = (text: string, settings: VoiceAlertOptions): void => {
+  if (!('speechSynthesis' in window)) {
+    console.warn('Speech synthesis not available');
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.volume = settings.volume;
+  utterance.rate = settings.rate;
+  utterance.pitch = settings.pitch;
+  utterance.lang = 'pt-BR';
+
+  const voices = window.speechSynthesis.getVoices();
+  const preferredVoice = voices.find(
+    (voice) => voice.lang === 'pt-BR' || voice.lang.startsWith('pt')
+  ) || voices.find(
+    (voice) => voice.name.includes('Google') || voice.name.includes('Microsoft')
+  );
+
+  if (preferredVoice) {
+    utterance.voice = preferredVoice;
+  }
+
+  window.speechSynthesis.speak(utterance);
+};
+
 export const useVoiceAlerts = (options: Partial<VoiceAlertOptions> = {}) => {
   const settings = { ...defaultOptions, ...options };
   const isSpeaking = useRef(false);
+  const audioQueue = useRef<string[]>([]);
+  const isProcessingQueue = useRef(false);
+
+  const processQueue = useCallback(async () => {
+    if (isProcessingQueue.current || audioQueue.current.length === 0) return;
+    
+    isProcessingQueue.current = true;
+    
+    while (audioQueue.current.length > 0) {
+      const text = audioQueue.current.shift();
+      if (!text) continue;
+      
+      isSpeaking.current = true;
+      
+      if (settings.useElevenLabs) {
+        const success = await speakWithElevenLabs(text, settings.volume);
+        if (!success) {
+          // Fallback to browser TTS
+          speakWithBrowser(text, settings);
+        }
+      } else {
+        speakWithBrowser(text, settings);
+      }
+      
+      // Small delay between messages
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    isSpeaking.current = false;
+    isProcessingQueue.current = false;
+  }, [settings]);
 
   const speak = useCallback((text: string) => {
-    if (!settings.enabled || !('speechSynthesis' in window)) {
-      console.warn('Speech synthesis not available');
-      return;
-    }
-
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.volume = settings.volume;
-    utterance.rate = settings.rate;
-    utterance.pitch = settings.pitch;
-    utterance.lang = 'pt-BR';
-
-    // Try to get a Brazilian Portuguese voice
-    const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = voices.find(
-      (voice) =>
-        voice.lang === 'pt-BR' ||
-        voice.lang.startsWith('pt')
-    ) || voices.find(
-      (voice) =>
-        voice.name.includes('Google') ||
-        voice.name.includes('Microsoft')
-    );
-
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
-    }
-
-    utterance.onstart = () => {
-      isSpeaking.current = true;
-    };
-
-    utterance.onend = () => {
-      isSpeaking.current = false;
-    };
-
-    window.speechSynthesis.speak(utterance);
-  }, [settings.enabled, settings.volume, settings.rate, settings.pitch]);
+    if (!settings.enabled) return;
+    
+    audioQueue.current.push(text);
+    processQueue();
+  }, [settings.enabled, processQueue]);
 
   const announceTradeOpened = useCallback((symbol: string, side: 'LONG' | 'SHORT', confidence: number) => {
     const sideText = side === 'LONG' ? 'compra' : 'venda';
     const confidencePercent = Math.round(confidence * 100);
-    speak(`Abrindo posição de ${sideText} em ${formatSymbol(symbol)} com ${confidencePercent} porcento de confiança`);
+    const text = `Abrindo posição de ${sideText} em ${formatSymbol(symbol)} com ${confidencePercent} por cento de confiança`;
+    speak(text);
   }, [speak]);
 
   const announceTradeClosed = useCallback((symbol: string, pnl: number, reason: string) => {
@@ -118,7 +185,8 @@ export const useVoiceAlerts = (options: Partial<VoiceAlertOptions> = {}) => {
       ? `lucro de ${Math.abs(pnl).toFixed(2)} dólares` 
       : `prejuízo de ${Math.abs(pnl).toFixed(2)} dólares`;
     const reasonText = reason === 'TP' ? 'take profit atingido' : reason === 'SL' ? 'stop loss acionado' : 'saída manual';
-    speak(`Trade de ${formatSymbol(symbol)} fechado com ${pnlText}. ${reasonText}`);
+    const text = `Trade de ${formatSymbol(symbol)} fechado com ${pnlText}. ${reasonText}`;
+    speak(text);
   }, [speak]);
 
   const announceAlert = useCallback((message: string) => {
