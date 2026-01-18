@@ -244,9 +244,9 @@ export const LiveNewsPanel = () => {
                 <p className="text-xs font-medium line-clamp-2 mb-1">{item.title}</p>
                 <div className="flex items-center gap-1">
                   {item.coins?.map(coin => (
-                    <Badge key={coin} variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                    <span key={coin} className="inline-flex items-center rounded-full border px-1.5 py-0 text-[9px] font-semibold h-4 bg-secondary text-secondary-foreground">
                       {coin}
-                    </Badge>
+                    </span>
                   ))}
                   <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 ml-auto">
                     {item.relevance}% relevante
