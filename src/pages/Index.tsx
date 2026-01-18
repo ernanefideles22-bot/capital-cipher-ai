@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
 import { Header } from '@/components/trading/Header';
 import { PriceCard } from '@/components/trading/PriceCard';
 import { StatsGrid } from '@/components/trading/StatsGrid';
@@ -21,17 +20,17 @@ import { useVoiceAlerts } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
 import { useTradesDB } from '@/hooks/useTradesDB';
 import { useBybitAccount } from '@/hooks/useBybitAccount';
-import { LogOut } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import type { TradeResult } from '@/hooks/useTradingAI';
+import type { Trade } from '@/types/trading';
 import { toast } from 'sonner';
 
 const Index = () => {
-  const navigate = useNavigate();
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const { announceTradeOpened, announceTradeClosed } = useVoiceAlerts({ enabled: voiceEnabled });
   const { user, signOut } = useAuth();
   const { saveTrade, loadTrades, updateBotStats } = useTradesDB(user?.id);
   const [dbTradesLoaded, setDbTradesLoaded] = useState(false);
+  const [realTrades, setRealTrades] = useState<Trade[]>([]);
   
   // Get mode from Bybit account hook
   const { isRealMode, wallet, positions } = useBybitAccount();
@@ -39,7 +38,7 @@ const Index = () => {
   const { 
     marketData, 
     botStats, 
-    trades, 
+    trades: simulatedTrades, 
     logs, 
     aiDecisions, 
     config,
@@ -51,34 +50,61 @@ const Index = () => {
     reconnect,
   } = useTradingData({ isRealMode });
 
-  // Load trades from database on mount
+  // Use real trades when in real mode, simulated when in demo
+  const trades = isRealMode ? realTrades : simulatedTrades;
+
+  // Load trades from database on mount (only real trades)
   useEffect(() => {
     if (user && !dbTradesLoaded) {
       loadTrades().then(({ data, error }) => {
         if (error) {
           console.error('Error loading trades:', error);
-        } else if (data && data.length > 0) {
-          toast.success(`${data.length} trades carregados do histórico`);
+        } else if (data) {
+          setRealTrades(data);
+          if (data.length > 0) {
+            toast.success(`${data.length} trades carregados do histórico`);
+          }
         }
         setDbTradesLoaded(true);
       });
     }
   }, [user, dbTradesLoaded, loadTrades]);
 
-  // Save new trades to database
-  useEffect(() => {
-    if (!user || !dbTradesLoaded) return;
+  // Callback to save real trades when executed via Trading AI
+  const handleRealTradeExecuted = useCallback(async (tradeResult: TradeResult) => {
+    if (!isRealMode || !user || !tradeResult.executed || !tradeResult.details) {
+      return;
+    }
+
+    const details = tradeResult.details;
     
-    // Save closed trades to database
-    const closedTrades = trades.filter(t => t.status === 'CLOSED' && t.closedAt);
-    closedTrades.forEach(trade => {
-      // Only save trades that are recent (within last 5 seconds)
-      const isRecent = trade.closedAt && (Date.now() - trade.closedAt.getTime()) < 5000;
-      if (isRecent) {
-        saveTrade(trade).catch(console.error);
-      }
-    });
-  }, [trades, user, dbTradesLoaded, saveTrade]);
+    // Create a Trade object from the trade result
+    const trade: Trade = {
+      id: tradeResult.orderId || crypto.randomUUID(),
+      symbol: details.symbol,
+      side: details.side === 'Buy' ? 'LONG' : 'SHORT',
+      strategy: 'SCALP', // Default strategy for AI trades
+      entryPrice: details.entry,
+      quantity: details.qty,
+      leverage: 10, // Default leverage from config
+      stopLoss: details.stopLoss || undefined,
+      takeProfit: details.takeProfit || undefined,
+      status: 'OPEN',
+      openedAt: new Date(),
+    };
+
+    // Save to database
+    const { data, error } = await saveTrade(trade, undefined, 'AI Auto-Trade');
+    
+    if (error) {
+      console.error('Error saving real trade:', error);
+      toast.error('Erro ao salvar trade no banco de dados');
+    } else {
+      // Add to local state
+      setRealTrades(prev => [trade, ...prev]);
+      toast.success(`Trade real salvo: ${trade.side} ${trade.symbol}`);
+    }
+  }, [isRealMode, user, saveTrade]);
 
   // Update bot stats in database periodically
   useEffect(() => {
@@ -159,7 +185,7 @@ const Index = () => {
             <TradingViewChart symbol="BTCUSDT" height={380} />
           </div>
           <div className="space-y-3">
-            <TradingAIPanel />
+            <TradingAIPanel onTradeExecuted={isRealMode ? handleRealTradeExecuted : undefined} />
             <DrawdownGauge stats={botStats} config={config} />
             <BybitConnectionPanel />
           </div>

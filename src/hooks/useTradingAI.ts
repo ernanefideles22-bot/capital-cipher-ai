@@ -63,6 +63,9 @@ export interface TradingConfig {
   intervalSeconds: number;
 }
 
+// Callback for when a trade is executed
+export type OnTradeExecutedCallback = (trade: TradeResult) => Promise<void>;
+
 const DEFAULT_CONFIG: TradingConfig = {
   leverage: 10,
   positionSize: 5,
@@ -72,7 +75,12 @@ const DEFAULT_CONFIG: TradingConfig = {
   intervalSeconds: 60,
 };
 
-export function useTradingAI() {
+interface UseTradingAIOptions {
+  onTradeExecuted?: OnTradeExecutedCallback;
+}
+
+export function useTradingAI(options: UseTradingAIOptions = {}) {
+  const { onTradeExecuted } = options;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<TradingConfig>(DEFAULT_CONFIG);
@@ -179,6 +187,16 @@ export function useTradingAI() {
           const side = data.tradeResult.details?.side;
           addLog(`✅ Trade executado: ${side} ${symbol} @ $${data.tradeResult.details?.entry}`, 'success');
           toast.success(`Trade executado: ${side} ${symbol}`);
+          
+          // Call the callback to save the trade to database
+          if (onTradeExecuted) {
+            try {
+              await onTradeExecuted(data.tradeResult);
+              addLog(`💾 Trade salvo no banco de dados`, 'info');
+            } catch (saveErr: any) {
+              addLog(`⚠️ Erro ao salvar trade: ${saveErr.message}`, 'error');
+            }
+          }
         } else {
           addLog(`⏸️ Trade não executado: ${data.tradeResult.reason}`, 'warning');
         }
@@ -194,7 +212,7 @@ export function useTradingAI() {
     } finally {
       setLoading(false);
     }
-  }, [config, addLog]);
+  }, [config, addLog, onTradeExecuted]);
 
   const startAutoTrading = useCallback(() => {
     if (isRunning) return;
