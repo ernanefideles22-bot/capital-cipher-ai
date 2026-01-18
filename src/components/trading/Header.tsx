@@ -1,13 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Settings, Wifi, WifiOff, FlaskConical, Volume2, VolumeX, LogOut, BarChart3, Wallet, RefreshCw, Loader2 } from 'lucide-react';
+import { Settings, Wifi, WifiOff, FlaskConical, Volume2, VolumeX, LogOut, BarChart3, Wallet, RefreshCw, Loader2, Maximize, Minimize } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import type { BotStats, BotConfig } from '@/types/trading';
 import { cn } from '@/lib/utils';
-import { ReactNode } from 'react';
+import { ReactNode, useState, useEffect, useCallback } from 'react';
 import { useBybitAccount } from '@/hooks/useBybitAccount';
-
 interface HeaderProps {
   stats: BotStats;
   config: BotConfig;
@@ -32,6 +31,26 @@ export const Header = ({
   const navigate = useNavigate();
   const { loading, wallet, isRealMode, toggleMode, refreshData } = useBybitAccount();
   const isRunning = stats.status === 'RUNNING';
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.error('Error attempting to enable fullscreen:', err);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
   
   return (
     <header className="glass-card px-3 md:px-4 py-2.5 flex items-center justify-between gap-2 md:gap-4 sticky top-0 z-50">
@@ -206,6 +225,20 @@ export const Header = ({
             <TooltipContent>{voiceEnabled ? 'Voz ON' : 'Voz OFF'}</TooltipContent>
           </Tooltip>
         )}
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={toggleFullscreen}
+            >
+              {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{isFullscreen ? 'Sair Tela Cheia' : 'Tela Cheia'}</TooltipContent>
+        </Tooltip>
 
         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
           <Settings className="w-4 h-4" />
