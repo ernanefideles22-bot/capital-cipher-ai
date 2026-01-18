@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Target, Shield, Zap, Brain, Loader2, BarChart2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Target, Shield, Zap, Brain, Loader2, BarChart2, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -68,6 +68,12 @@ export const BotOpportunitiesPanel = ({
               ATIVO
             </Badge>
           )}
+          {lastAnalysis?.neuralEnabled && (
+            <Badge variant="outline" className="border-purple-500 text-purple-400 text-[10px] gap-0.5">
+              <Sparkles className="w-2.5 h-2.5" />
+              Neural
+            </Badge>
+          )}
         </div>
         <Button
           size="sm"
@@ -89,6 +95,33 @@ export const BotOpportunitiesPanel = ({
           )}
         </Button>
       </div>
+
+      {/* Neural Network Status */}
+      {lastAnalysis?.neuralEnabled && (
+        <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/30 mb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span className="text-xs font-medium text-purple-400">
+              Rede Neural Ativa
+            </span>
+            <Badge variant="outline" className="text-[9px] px-1 py-0 border-purple-500/50 text-purple-300">
+              {lastAnalysis.neuralEpochs} épocas | {lastAnalysis.neuralAccuracy?.toFixed(1)}% precisão
+            </Badge>
+          </div>
+          {lastAnalysis.neuralBonuses && lastAnalysis.neuralBonuses.length > 0 && (
+            <div className="space-y-0.5 mt-1">
+              {lastAnalysis.neuralBonuses.slice(0, 3).map((bonus, i) => (
+                <p key={i} className="text-[10px] text-purple-300/80">{bonus}</p>
+              ))}
+            </div>
+          )}
+          {lastAnalysis.neuralInsights && (
+            <p className="text-[10px] text-purple-300/70 mt-1 italic">
+              💡 {lastAnalysis.neuralInsights}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Market Overview */}
       {lastAnalysis?.marketOverview && (
@@ -190,9 +223,19 @@ export const BotOpportunitiesPanel = ({
                         expandedChart === opp.symbol ? "text-primary" : "text-muted-foreground"
                       )} />
                     </Button>
+                    {opp.neuralAdjusted && (
+                      <span title="Score ajustado por rede neural">
+                        <Sparkles className="w-3 h-3 text-purple-400" />
+                      </span>
+                    )}
                     <span className={cn("text-sm font-bold font-mono", getScoreColor(opp.score))}>
                       {opp.score}
                     </span>
+                    {opp.neuralAdjusted && opp.originalScore && opp.originalScore !== opp.score && (
+                      <span className="text-[9px] text-purple-400/70 line-through">
+                        {opp.originalScore}
+                      </span>
+                    )}
                     <span className="text-[10px] text-muted-foreground">score</span>
                   </div>
                 </div>
@@ -239,12 +282,19 @@ export const BotOpportunitiesPanel = ({
                   </div>
                 </div>
 
-                {/* Risk/Reward */}
+                {/* Risk/Reward & Strategy */}
                 <div className="flex items-center justify-between p-1.5 rounded bg-muted/30 mb-2">
-                  <span className="text-[10px] text-muted-foreground">Risco/Retorno</span>
-                  <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0">
-                    1:{opp.riskRewardRatio?.toFixed(2) || '—'}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground">R/R</span>
+                    <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0">
+                      1:{opp.riskRewardRatio?.toFixed(2) || '—'}
+                    </Badge>
+                  </div>
+                  {opp.suggestedStrategy && (
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-purple-500/50 text-purple-400">
+                      {opp.suggestedStrategy}
+                    </Badge>
+                  )}
                 </div>
 
                 {/* Reasoning */}

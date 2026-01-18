@@ -14,6 +14,10 @@ export interface BotOpportunity {
   stopLoss: number;
   takeProfit: number;
   riskRewardRatio: number;
+  neuralAdjusted?: boolean;
+  originalScore?: number;
+  originalConfidence?: number;
+  suggestedStrategy?: 'SCALP' | 'DAYTRADE' | 'SWING';
 }
 
 export interface MultiPairAnalysisResult {
@@ -27,6 +31,12 @@ export interface MultiPairAnalysisResult {
     action: 'BUY' | 'SELL';
     urgency: 'high' | 'medium' | 'low';
   } | null;
+  // Neural network info
+  neuralEnabled?: boolean;
+  neuralEpochs?: number;
+  neuralAccuracy?: number;
+  neuralBonuses?: string[];
+  neuralInsights?: string;
 }
 
 interface TradingRules {
