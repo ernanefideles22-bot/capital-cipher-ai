@@ -13,6 +13,7 @@ import { DrawdownGauge } from '@/components/trading/DrawdownGauge';
 import { ConfigPanel } from '@/components/trading/ConfigPanel';
 import { ConnectionStatus } from '@/components/trading/ConnectionStatus';
 import { BybitConnectionPanel } from '@/components/trading/BybitConnectionPanel';
+import { TradingAIPanel } from '@/components/trading/TradingAIPanel';
 import { LiveNewsPanel } from '@/components/trading/LiveNewsPanel';
 import { AIMarketAnalysis } from '@/components/trading/AIMarketAnalysis';
 import { useTradingData, setVoiceAlertCallbacks } from '@/hooks/useTradingData';
@@ -150,6 +151,7 @@ const Index = () => {
             <TradingViewChart symbol="BTCUSDT" height={380} />
           </div>
           <div className="space-y-3">
+            <TradingAIPanel />
             <DrawdownGauge stats={botStats} config={config} />
             <BybitConnectionPanel />
           </div>
