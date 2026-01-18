@@ -28,6 +28,16 @@ export interface MultiPairAnalysisResult {
   } | null;
 }
 
+interface TradingRules {
+  maxDrawdownPercent: number;
+  maxDailyLossPercent: number;
+  maxConcurrentTrades: number;
+  minConfidence: number;
+  minScore: number;
+  riskPerTradePercent: number;
+  cooldownBetweenTradesMs: number;
+}
+
 interface UseAutonomousBotOptions {
   marketData: Record<string, MarketData>;
   onTradeOpened?: (trade: Trade) => void;
@@ -36,26 +46,75 @@ interface UseAutonomousBotOptions {
   intervalMs?: number;
   minConfidence?: number;
   maxConcurrentTrades?: number;
+  currentDrawdown?: number;
+  dailyPnL?: number;
+  accountBalance?: number;
+  tradingRules?: Partial<TradingRules>;
 }
+
+const DEFAULT_RULES: TradingRules = {
+  maxDrawdownPercent: 10,
+  maxDailyLossPercent: 5,
+  maxConcurrentTrades: 3,
+  minConfidence: 70,
+  minScore: 65,
+  riskPerTradePercent: 2,
+  cooldownBetweenTradesMs: 30000, // 30 seconds between trades
+};
 
 export const useAutonomousBot = ({
   marketData,
   onTradeOpened,
   onDecisionMade,
   onLog,
-  intervalMs = 60000, // Default: analyze every 60 seconds
+  intervalMs = 60000,
   minConfidence = 70,
   maxConcurrentTrades = 3,
+  currentDrawdown = 0,
+  dailyPnL = 0,
+  accountBalance = 10000,
+  tradingRules = {},
 }: UseAutonomousBotOptions) => {
+  const rules: TradingRules = { ...DEFAULT_RULES, ...tradingRules, minConfidence, maxConcurrentTrades };
   const [isRunning, setIsRunning] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [lastAnalysis, setLastAnalysis] = useState<MultiPairAnalysisResult | null>(null);
   const [opportunities, setOpportunities] = useState<BotOpportunity[]>([]);
   const [openTrades, setOpenTrades] = useState<Trade[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [lastTradeTime, setLastTradeTime] = useState<number>(0);
+  const [tradesToday, setTradesToday] = useState<number>(0);
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isRunningRef = useRef(false);
+
+  // Check if trading is allowed based on rules
+  const canTrade = useCallback((): { allowed: boolean; reason?: string } => {
+    // Check drawdown limit
+    if (currentDrawdown >= rules.maxDrawdownPercent) {
+      return { allowed: false, reason: `Drawdown máximo atingido (${currentDrawdown.toFixed(1)}% >= ${rules.maxDrawdownPercent}%)` };
+    }
+
+    // Check daily loss limit
+    const dailyLossPercent = accountBalance > 0 ? (Math.abs(Math.min(0, dailyPnL)) / accountBalance) * 100 : 0;
+    if (dailyLossPercent >= rules.maxDailyLossPercent) {
+      return { allowed: false, reason: `Perda diária máxima atingida (${dailyLossPercent.toFixed(1)}% >= ${rules.maxDailyLossPercent}%)` };
+    }
+
+    // Check max concurrent trades
+    if (openTrades.length >= rules.maxConcurrentTrades) {
+      return { allowed: false, reason: `Limite de ${rules.maxConcurrentTrades} trades simultâneos` };
+    }
+
+    // Check cooldown between trades
+    const timeSinceLastTrade = Date.now() - lastTradeTime;
+    if (timeSinceLastTrade < rules.cooldownBetweenTradesMs) {
+      const remaining = Math.ceil((rules.cooldownBetweenTradesMs - timeSinceLastTrade) / 1000);
+      return { allowed: false, reason: `Aguardando cooldown (${remaining}s)` };
+    }
+
+    return { allowed: true };
+  }, [currentDrawdown, dailyPnL, accountBalance, openTrades.length, lastTradeTime, rules]);
 
   const addLog = useCallback((level: LogEntry['level'], message: string) => {
     const log: LogEntry = {
@@ -141,17 +200,44 @@ export const useAutonomousBot = ({
   }, [marketData, addLog]);
 
   const executeOpportunity = useCallback(async (opportunity: BotOpportunity) => {
-    if (openTrades.length >= maxConcurrentTrades) {
-      addLog('WARN', `Limite de ${maxConcurrentTrades} trades simultâneos atingido`);
+    // Check all trading rules first
+    const tradingCheck = canTrade();
+    if (!tradingCheck.allowed) {
+      addLog('WARN', `⚠️ Trade bloqueado: ${tradingCheck.reason}`);
       return null;
     }
 
-    if (opportunity.confidence < minConfidence) {
-      addLog('INFO', `${opportunity.symbol}: Confiança ${opportunity.confidence}% abaixo do mínimo (${minConfidence}%)`);
+    // Check minimum confidence
+    if (opportunity.confidence < rules.minConfidence) {
+      addLog('INFO', `${opportunity.symbol}: Confiança ${opportunity.confidence}% abaixo do mínimo (${rules.minConfidence}%)`);
+      return null;
+    }
+
+    // Check minimum score
+    if (opportunity.score < rules.minScore) {
+      addLog('INFO', `${opportunity.symbol}: Score ${opportunity.score} abaixo do mínimo (${rules.minScore})`);
+      return null;
+    }
+
+    // Only execute BUY or SELL signals
+    if (opportunity.recommendation !== 'BUY' && opportunity.recommendation !== 'SELL') {
+      return null;
+    }
+
+    // Check if we already have an open trade for this symbol
+    const existingTrade = openTrades.find(t => t.symbol === opportunity.symbol && t.status === 'OPEN');
+    if (existingTrade) {
+      addLog('INFO', `${opportunity.symbol}: Já existe trade aberto para este par`);
       return null;
     }
 
     const side: Trade['side'] = opportunity.recommendation === 'BUY' ? 'LONG' : 'SHORT';
+    
+    // Calculate position size based on risk management
+    const riskAmount = (accountBalance * rules.riskPerTradePercent) / 100;
+    const stopDistance = Math.abs(opportunity.entryPrice - opportunity.stopLoss);
+    const calculatedQty = stopDistance > 0 ? riskAmount / stopDistance : 0.1;
+    const quantity = Math.max(0.001, Math.min(calculatedQty, 1)); // Limit between 0.001 and 1
     
     const trade: Trade = {
       id: crypto.randomUUID(),
@@ -159,17 +245,19 @@ export const useAutonomousBot = ({
       side,
       strategy: 'AI_AUTO',
       entryPrice: opportunity.entryPrice,
-      quantity: 0.1, // Default quantity - should be calculated based on risk
+      quantity,
       leverage: 5,
-    stopLoss: opportunity.stopLoss,
-    takeProfit: opportunity.takeProfit,
-    status: 'OPEN',
+      stopLoss: opportunity.stopLoss,
+      takeProfit: opportunity.takeProfit,
+      status: 'OPEN',
       openedAt: new Date(),
       aiConfidence: opportunity.confidence,
       aiReasoning: opportunity.reasoning,
     };
 
     setOpenTrades(prev => [...prev, trade]);
+    setLastTradeTime(Date.now());
+    setTradesToday(prev => prev + 1);
     onTradeOpened?.(trade);
 
     const decision: AIDecision = {
@@ -189,31 +277,52 @@ export const useAutonomousBot = ({
 
     onDecisionMade?.(decision);
     
-    addLog('TRADE', `🚀 ${side} ${opportunity.symbol} @ $${opportunity.entryPrice.toLocaleString()} | SL: $${opportunity.stopLoss.toLocaleString()} | TP: $${opportunity.takeProfit.toLocaleString()}`);
-    toast.success(`Trade aberto: ${side} ${opportunity.symbol}`);
+    addLog('TRADE', `🚀 ${side} ${opportunity.symbol} @ $${opportunity.entryPrice.toLocaleString()} | Conf: ${opportunity.confidence}% | R/R: 1:${opportunity.riskRewardRatio?.toFixed(1) || '?'}`);
+    addLog('INFO', `📍 SL: $${opportunity.stopLoss.toLocaleString()} | TP: $${opportunity.takeProfit.toLocaleString()} | Qty: ${quantity.toFixed(4)}`);
+    toast.success(`Trade executado: ${side} ${opportunity.symbol} (${opportunity.confidence}%)`);
 
     return trade;
-  }, [openTrades.length, maxConcurrentTrades, minConfidence, onTradeOpened, onDecisionMade, addLog]);
+  }, [canTrade, rules, openTrades, accountBalance, onTradeOpened, onDecisionMade, addLog]);
 
   const runAnalysisCycle = useCallback(async () => {
     if (!isRunningRef.current) return;
 
+    // Check if trading is allowed before analyzing
+    const tradingCheck = canTrade();
+    if (!tradingCheck.allowed) {
+      addLog('WARN', `⚠️ Ciclo pausado: ${tradingCheck.reason}`);
+      return;
+    }
+
     const analysis = await analyzeAllPairs();
     
-    if (analysis?.topPick && analysis.bestOpportunities?.length > 0) {
-      // Find the top opportunity
-      const topOpp = analysis.bestOpportunities.find(
-        o => o.symbol === analysis.topPick?.symbol
-      );
-      
-      if (topOpp && topOpp.confidence >= minConfidence && topOpp.score >= 70) {
-        // Auto-execute if conditions are met
-        if (topOpp.recommendation === 'BUY' || topOpp.recommendation === 'SELL') {
-          await executeOpportunity(topOpp);
+    if (analysis?.bestOpportunities?.length > 0) {
+      // Execute ALL opportunities that meet criteria (sorted by score, highest first)
+      const validOpportunities = analysis.bestOpportunities
+        .filter(o => 
+          o.confidence >= rules.minConfidence && 
+          o.score >= rules.minScore &&
+          (o.recommendation === 'BUY' || o.recommendation === 'SELL')
+        )
+        .sort((a, b) => b.score - a.score);
+
+      addLog('AI', `📈 ${validOpportunities.length} oportunidades válidas (conf >= ${rules.minConfidence}%)`);
+
+      // Try to execute each opportunity (respecting limits)
+      for (const opp of validOpportunities) {
+        const stillCanTrade = canTrade();
+        if (!stillCanTrade.allowed) {
+          addLog('INFO', `Parando execução: ${stillCanTrade.reason}`);
+          break;
         }
+
+        await executeOpportunity(opp);
+        
+        // Small delay between executions to avoid overwhelming
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
-  }, [analyzeAllPairs, executeOpportunity, minConfidence]);
+  }, [analyzeAllPairs, executeOpportunity, canTrade, rules, addLog]);
 
   const start = useCallback(() => {
     if (isRunning) return;
@@ -221,16 +330,18 @@ export const useAutonomousBot = ({
     setIsRunning(true);
     isRunningRef.current = true;
     setError(null);
+    setTradesToday(0);
     
-    addLog('INFO', '🤖 Bot autônomo iniciado - analisando todos os pares');
-    toast.success('Bot autônomo iniciado');
+    addLog('SUCCESS', '🤖 Bot autônomo ATIVADO');
+    addLog('INFO', `📋 Regras: Conf >= ${rules.minConfidence}% | Max ${rules.maxConcurrentTrades} trades | Drawdown max ${rules.maxDrawdownPercent}%`);
+    toast.success('Bot autônomo ativado - executando trades automaticamente');
 
     // Run immediately
     runAnalysisCycle();
 
     // Set up interval
     intervalRef.current = setInterval(runAnalysisCycle, intervalMs);
-  }, [isRunning, intervalMs, runAnalysisCycle, addLog]);
+  }, [isRunning, intervalMs, runAnalysisCycle, rules, addLog]);
 
   const stop = useCallback(() => {
     if (!isRunning) return;

@@ -122,6 +122,13 @@ const Index = () => {
     intervalMs: 60000, // Analyze every 60 seconds
     minConfidence: 70,
     maxConcurrentTrades: config.maxConcurrentTrades,
+    currentDrawdown: botStats.currentDrawdown,
+    dailyPnL: botStats.dailyPnL,
+    accountBalance: wallet?.totalEquity || 10000,
+    tradingRules: {
+      maxDrawdownPercent: config.maxDrawdown,
+      riskPerTradePercent: config.riskPerTrade,
+    },
   });
 
   // Toggle bot status based on mode - now uses autonomous bot
