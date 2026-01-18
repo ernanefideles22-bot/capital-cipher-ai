@@ -214,6 +214,11 @@ const Index = () => {
           </div>
         )}
 
+        {/* Config Panel - Top */}
+        <section>
+          <ConfigPanel config={config} onUpdateConfig={updateConfig} />
+        </section>
+
         {/* Price Tickers */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {Object.values(marketData).map((data) => (
@@ -254,7 +259,7 @@ const Index = () => {
             <TradesTable trades={trades} isRealMode={isRealMode} />
           </div>
 
-          {/* Right Column - AI Analysis, Decisions, Config */}
+          {/* Right Column - AI Analysis, Decisions */}
           <div className="space-y-3">
             <AIMarketAnalysis 
               marketData={
@@ -271,7 +276,6 @@ const Index = () => {
             <div className="h-[240px]">
               <AIDecisionsPanel decisions={aiDecisions} isRealMode={isRealMode} />
             </div>
-            <ConfigPanel config={config} onUpdateConfig={updateConfig} />
           </div>
         </section>
 
