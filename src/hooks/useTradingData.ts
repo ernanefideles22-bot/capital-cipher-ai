@@ -750,6 +750,11 @@ export const useTradingData = (options: UseTradingDataOptions = {}) => {
     });
   }, [isConnected, sendMessage]);
 
+  // Clear logs
+  const clearLogs = useCallback(() => {
+    setLogs([]);
+  }, []);
+
   return {
     // Connection status
     isConnected,
@@ -769,5 +774,6 @@ export const useTradingData = (options: UseTradingDataOptions = {}) => {
     toggleBotStatus,
     updateConfig,
     sendCommand: sendMessage,
+    clearLogs,
   };
 };
