@@ -79,17 +79,17 @@ export function useBybitAccount(): BybitAccountState {
     notifyListeners();
   }, [isRealMode]);
 
-  // Initial fetch and auto-refresh every 3 seconds
+  // Initial fetch and auto-refresh every 2 seconds for more responsive updates
   useEffect(() => {
     if (!isRealMode) return;
     
     // Initial fetch
     refreshData();
     
-    // Auto-refresh every 3 seconds
+    // Auto-refresh every 2 seconds for real-time feel
     const interval = setInterval(() => {
       refreshData();
-    }, 3000);
+    }, 2000);
     
     return () => clearInterval(interval);
   }, [isRealMode, refreshData]);
