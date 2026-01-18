@@ -26,6 +26,7 @@ import { useRealTradingData } from '@/hooks/useRealTradingData';
 import { useVoiceAlerts, playVoiceToggleSound } from '@/hooks/useVoiceAlerts';
 import { useAuth } from '@/hooks/useAuth';
 import { useBybitAccount } from '@/hooks/useBybitAccount';
+import { useBybitAPI } from '@/hooks/useBybitAPI';
 import { useAutonomousBot } from '@/hooks/useAutonomousBot';
 import { useNeuralNetwork } from '@/hooks/useNeuralNetwork';
 import type { TradeResult } from '@/hooks/useTradingAI';
@@ -33,7 +34,7 @@ import type { Trade, BotStats, AIDecision, LogEntry } from '@/types/trading';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Settings, Play, Pause, Brain, Loader2 } from 'lucide-react';
+import { AlertCircle, Settings, Play, Pause, Brain, Loader2, XCircle } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -51,6 +52,10 @@ const Index = () => {
   
   // Get mode from Bybit account hook
   const { isRealMode, wallet, positions, refreshData: refreshBybit, loading: bybitLoading, isRefreshing } = useBybitAccount();
+  
+  // Bybit API for closing positions
+  const bybitAPI = useBybitAPI();
+  const [isClosingAll, setIsClosingAll] = useState(false);
   
   // DEMO mode data - simulated
   const { 
@@ -265,6 +270,39 @@ const Index = () => {
     toast.success('Logout realizado com sucesso');
   };
 
+  const handleCloseAllTrades = async () => {
+    if (positions.length === 0) {
+      toast.info('Não há posições abertas para encerrar');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Deseja realmente encerrar ${positions.length} posição(ões) aberta(s)? Esta ação não pode ser desfeita.`
+    );
+
+    if (!confirmed) return;
+
+    setIsClosingAll(true);
+    try {
+      const result = await bybitAPI.closeAllPositions();
+      
+      if (result.success > 0) {
+        toast.success(`${result.success} posição(ões) encerrada(s) com sucesso!`);
+      }
+      
+      if (result.failed > 0) {
+        toast.error(`${result.failed} posição(ões) falharam: ${result.errors.join(', ')}`);
+      }
+
+      // Refresh data after closing
+      await refreshBybit();
+    } catch (err: any) {
+      toast.error(`Erro ao encerrar posições: ${err.message}`);
+    } finally {
+      setIsClosingAll(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header 
@@ -332,6 +370,28 @@ const Index = () => {
                     </>
                   )}
                 </Button>
+                
+                {/* Close All Trades Button */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCloseAllTrades}
+                  disabled={isClosingAll || positions.length === 0}
+                  className={`h-7 px-3 gap-1.5 ${positions.length > 0 ? 'border-loss text-loss hover:bg-loss/10' : ''}`}
+                >
+                  {isClosingAll ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Encerrando...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-3 h-3" />
+                      Encerrar Trades ({positions.length})
+                    </>
+                  )}
+                </Button>
+                
                 <Badge variant="outline" className="border-profit text-profit">
                   Saldo: ${wallet?.totalEquity.toLocaleString('en-US', { maximumFractionDigits: 2 }) ?? '--'}
                 </Badge>
