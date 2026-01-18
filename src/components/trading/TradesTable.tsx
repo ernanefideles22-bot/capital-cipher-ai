@@ -13,6 +13,7 @@ import {
 
 interface TradesTableProps {
   trades: Trade[];
+  isRealMode?: boolean;
 }
 
 const strategyColors: Record<Trade['strategy'], string> = {
@@ -21,14 +22,30 @@ const strategyColors: Record<Trade['strategy'], string> = {
   SWING: 'bg-warning/20 text-warning border-warning/30',
 };
 
-export const TradesTable = ({ trades }: TradesTableProps) => {
+export const TradesTable = ({ trades, isRealMode = false }: TradesTableProps) => {
   const recentTrades = trades.slice(0, 10);
   
   return (
     <div className="glass-card overflow-hidden">
       <div className="p-4 border-b border-border">
-        <h3 className="font-semibold">Trades Recentes</h3>
-        <p className="text-xs text-muted-foreground mt-1">Últimas 10 operações</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold">Trades Recentes</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              {isRealMode ? 'Trades reais da Bybit' : 'Trades simulados (Demo)'}
+            </p>
+          </div>
+          {isRealMode && (
+            <span className="text-xs px-2 py-1 rounded bg-profit/10 text-profit border border-profit/30">
+              🟢 Real
+            </span>
+          )}
+          {!isRealMode && (
+            <span className="text-xs px-2 py-1 rounded bg-warning/10 text-warning border border-warning/30">
+              🟡 Demo
+            </span>
+          )}
+        </div>
       </div>
       
       <div className="overflow-x-auto scrollbar-thin">
