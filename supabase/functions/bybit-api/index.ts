@@ -206,7 +206,7 @@ serve(async (req) => {
         break;
 
       case "placeOrder":
-        const orderParams = {
+        const orderParams: Record<string, string | number> = {
           category: "linear",
           symbol: params.symbol,
           side: params.side,
@@ -216,13 +216,19 @@ serve(async (req) => {
           positionIdx: 0,
         };
         
-        if (params.takeProfit) {
-          Object.assign(orderParams, { takeProfit: params.takeProfit.toString() });
-        }
-        if (params.stopLoss) {
-          Object.assign(orderParams, { stopLoss: params.stopLoss.toString() });
+        // reduceOnly is critical for closing positions
+        if (params.reduceOnly) {
+          orderParams.reduceOnly = "true";
         }
         
+        if (params.takeProfit) {
+          orderParams.takeProfit = params.takeProfit.toString();
+        }
+        if (params.stopLoss) {
+          orderParams.stopLoss = params.stopLoss.toString();
+        }
+        
+        console.log("Placing order with params:", JSON.stringify(orderParams));
         result = await bybitRequest("/v5/order/create", "POST", orderParams);
         break;
 
