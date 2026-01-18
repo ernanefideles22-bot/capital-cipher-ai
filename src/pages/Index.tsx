@@ -30,7 +30,14 @@ import { AlertCircle, Settings, Play, Pause } from 'lucide-react';
 const Index = () => {
   const navigate = useNavigate();
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
+  const [selectedSymbol, setSelectedSymbol] = useState(() => {
+    return localStorage.getItem('selectedSymbol') || 'BTCUSDT';
+  });
+  
+  // Persist selected symbol to localStorage
+  useEffect(() => {
+    localStorage.setItem('selectedSymbol', selectedSymbol);
+  }, [selectedSymbol]);
   const { announceTradeOpened, announceTradeClosed } = useVoiceAlerts({ enabled: voiceEnabled });
   const { user, signOut } = useAuth();
   
