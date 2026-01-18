@@ -76,14 +76,13 @@ async function authenticateUser(req: Request): Promise<{ userId: string } | null
     { global: { headers: { Authorization: authHeader } } }
   );
 
-  const token = authHeader.replace("Bearer ", "");
-  const { data, error } = await supabaseClient.auth.getClaims(token);
+  const { data: { user }, error } = await supabaseClient.auth.getUser();
   
-  if (error || !data?.claims?.sub) {
+  if (error || !user) {
     return null;
   }
 
-  return { userId: data.claims.sub as string };
+  return { userId: user.id };
 }
 
 serve(async (req) => {
