@@ -1,10 +1,12 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Settings, Wifi, WifiOff, FlaskConical, Volume2, VolumeX, LogOut, BarChart3 } from 'lucide-react';
+import { Settings, Wifi, WifiOff, FlaskConical, Volume2, VolumeX, LogOut, BarChart3, Wallet, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 import type { BotStats, BotConfig } from '@/types/trading';
 import { cn } from '@/lib/utils';
 import { ReactNode } from 'react';
+import { useBybitAccount } from '@/hooks/useBybitAccount';
 
 interface HeaderProps {
   stats: BotStats;
@@ -28,6 +30,7 @@ export const Header = ({
   userEmail
 }: HeaderProps) => {
   const navigate = useNavigate();
+  const { loading, wallet, isRealMode, toggleMode, refreshData } = useBybitAccount();
   const isRunning = stats.status === 'RUNNING';
   
   return (
@@ -42,15 +45,53 @@ export const Header = ({
             AI Bot
           </h1>
         </div>
+
+        {/* Mode Toggle */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={toggleMode}
+          className={cn(
+            "h-7 px-2 text-[10px] md:text-xs font-semibold transition-all",
+            isRealMode 
+              ? "border-profit bg-profit/10 text-profit hover:bg-profit/20" 
+              : "border-warning bg-warning/10 text-warning hover:bg-warning/20"
+          )}
+        >
+          {isRealMode ? '🟢 REAL' : '🟡 DEMO'}
+        </Button>
+
+        {/* Balance Indicator */}
+        {isRealMode && (
+          <div className="hidden md:flex items-center gap-1.5 bg-muted/30 rounded-lg px-2 py-1">
+            <Wallet className="w-3.5 h-3.5 text-muted-foreground" />
+            {loading ? (
+              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+            ) : wallet ? (
+              <span className="text-xs font-mono font-semibold">
+                ${wallet.totalEquity.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">--</span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 p-0"
+              onClick={refreshData}
+              disabled={loading}
+            >
+              <RefreshCw className={cn("w-3 h-3 text-muted-foreground", loading && "animate-spin")} />
+            </Button>
+          </div>
+        )}
+
         <div className="flex items-center gap-1.5 shrink-0">
           <span className={cn(
             "status-badge text-[10px] md:text-xs px-1.5 py-0.5",
             isRunning ? "status-badge-active" : "status-badge-paused"
           )}>
             {stats.status}
-          </span>
-          <span className="status-badge text-[10px] md:text-xs px-1.5 py-0.5 bg-accent/20 text-accent border border-accent/30">
-            {config.mode.toUpperCase()}
           </span>
         </div>
         <div className="hidden sm:block">
