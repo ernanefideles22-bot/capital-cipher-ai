@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TrendingUp, TrendingDown, RefreshCw, BarChart3, Loader2, LineChart } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { FloatingPositionChart } from './FloatingPositionChart';
+
 
 interface Position {
   symbol: string;
@@ -192,19 +192,6 @@ export const BybitPositionsPanel = ({
                           }
                         </TableCell>
                       </TableRow>
-                      {/* Expanded Chart Row */}
-                      {isExpanded && (
-                        <TableRow className="hover:bg-transparent">
-                          <TableCell colSpan={7} className="p-0">
-                            <div className="p-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                              <FloatingPositionChart
-                                position={pos}
-                                onClose={() => setExpandedPosition(null)}
-                              />
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
                     </React.Fragment>
                   );
                 })}
