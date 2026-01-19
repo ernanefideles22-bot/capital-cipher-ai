@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,36 +15,59 @@ interface WalletInfo {
 }
 
 export const BybitConnectionPanel = () => {
-  const { loading, error, connected, testConnection, getWalletBalance, getPositions } = useBybitAPI();
+  const { loading, error, connected, testConnection, getWalletBalance, getPositions, clearCache } = useBybitAPI();
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
   const [positions, setPositions] = useState<any[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const mountedRef = useRef(true);
 
-  const refreshData = async () => {
-    const isConnected = await testConnection();
+  const refreshData = useCallback(async (showToast = false) => {
+    if (isRefreshing) return;
     
-    if (isConnected) {
-      const walletData = await getWalletBalance();
-      if (walletData) {
-        setWallet(walletData);
+    setIsRefreshing(true);
+    try {
+      const isConnected = await testConnection();
+      
+      if (isConnected && mountedRef.current) {
+        const walletData = await getWalletBalance();
+        if (walletData && mountedRef.current) {
+          setWallet(walletData);
+        }
+        
+        const positionsData = await getPositions();
+        if (mountedRef.current) {
+          setPositions(positionsData);
+          setLastUpdate(new Date());
+          if (showToast) {
+            toast.success('Dados da Bybit atualizados');
+          }
+        }
+      } else if (showToast) {
+        toast.error('Falha ao conectar com a Bybit');
       }
-      
-      const positionsData = await getPositions();
-      setPositions(positionsData);
-      
-      setLastUpdate(new Date());
-      toast.success('Dados da Bybit atualizados');
-    } else {
-      toast.error('Falha ao conectar com a Bybit');
+    } finally {
+      if (mountedRef.current) {
+        setIsRefreshing(false);
+      }
     }
-  };
+  }, [testConnection, getWalletBalance, getPositions, isRefreshing]);
+
+  const handleManualRefresh = useCallback(() => {
+    clearCache();
+    refreshData(true);
+  }, [clearCache, refreshData]);
 
   useEffect(() => {
+    mountedRef.current = true;
     refreshData();
     
-    // Auto refresh every 30 seconds
-    const interval = setInterval(refreshData, 30000);
-    return () => clearInterval(interval);
+    // Auto refresh every 30 seconds (reduced frequency)
+    const interval = setInterval(() => refreshData(false), 30000);
+    return () => {
+      mountedRef.current = false;
+      clearInterval(interval);
+    };
   }, []);
 
   return (
@@ -69,10 +92,10 @@ export const BybitConnectionPanel = () => {
             <Button 
               variant="ghost" 
               size="icon" 
-              onClick={refreshData}
-              disabled={loading}
+              onClick={handleManualRefresh}
+              disabled={loading || isRefreshing}
             >
-              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+              <RefreshCw className={cn("h-4 w-4", (loading || isRefreshing) && "animate-spin")} />
             </Button>
           </div>
         </div>
