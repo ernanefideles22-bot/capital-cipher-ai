@@ -3,7 +3,7 @@ import { TrendingUp, TrendingDown, Activity, DollarSign, Target, X, RefreshCw, L
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { FloatingPositionChart } from './FloatingPositionChart';
+
 import { useBybitAPI } from '@/hooks/useBybitAPI';
 import { toast } from 'sonner';
 
@@ -299,16 +299,6 @@ export const ActiveTradesWidget = ({ positions, className, isRefreshing, onPosit
                 <TPSLProgressBar position={pos} />
               </div>
 
-              {/* Floating Chart Popup */}
-              {isExpanded && (
-                <div className="absolute top-full left-0 right-0 mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <FloatingPositionChart
-                    position={pos}
-                    onClose={() => setExpandedSymbol(null)}
-                    className="shadow-2xl"
-                  />
-                </div>
-              )}
             </div>
           );
         })}

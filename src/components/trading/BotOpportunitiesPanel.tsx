@@ -10,7 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { BotOpportunity, MultiPairAnalysisResult } from '@/hooks/useAutonomousBot';
-import { FloatingPriceChart } from './FloatingPriceChart';
+
 
 interface BotOpportunitiesPanelProps {
   opportunities: BotOpportunity[];
@@ -294,16 +294,6 @@ export const BotOpportunitiesPanel = ({
                   </div>
                 </div>
 
-                {/* Floating Chart (when expanded) */}
-                {expandedChart === opp.symbol && (
-                  <div className="mb-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <FloatingPriceChart
-                      opportunity={opp}
-                      currentPrice={marketPrices[opp.symbol]}
-                      onClose={() => setExpandedChart(null)}
-                    />
-                  </div>
-                )}
 
                 {/* Confidence Bar */}
                 <div className="mb-2">
