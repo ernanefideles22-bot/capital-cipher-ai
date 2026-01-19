@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface BybitResponse {
@@ -55,33 +55,162 @@ interface OrderHistory {
   cumExecValue: string;
 }
 
+// Global rate limiting and caching
+const requestQueue: Array<{
+  action: string;
+  params: Record<string, any>;
+  resolve: (value: BybitResponse | null) => void;
+  reject: (reason?: any) => void;
+}> = [];
+
+let isProcessingQueue = false;
+const MIN_REQUEST_INTERVAL = 150; // 150ms between requests to avoid rate limiting
+let lastRequestTime = 0;
+
+// Request deduplication cache
+interface CacheEntry {
+  data: BybitResponse | null;
+  timestamp: number;
+}
+const requestCache = new Map<string, CacheEntry>();
+const CACHE_TTL = 2000; // 2 second cache for most requests
+const CACHE_TTL_SHORT = 500; // 0.5 second for frequently changing data
+
+// Pending requests deduplication
+const pendingRequests = new Map<string, Promise<BybitResponse | null>>();
+
+function getCacheKey(action: string, params: Record<string, any>): string {
+  return `${action}:${JSON.stringify(params)}`;
+}
+
+function getCacheTTL(action: string): number {
+  // Use shorter TTL for frequently changing data
+  if (['getPositions', 'getWalletBalance', 'getOrders'].includes(action)) {
+    return CACHE_TTL_SHORT;
+  }
+  return CACHE_TTL;
+}
+
+async function processQueue(): Promise<void> {
+  if (isProcessingQueue || requestQueue.length === 0) return;
+  
+  isProcessingQueue = true;
+  
+  while (requestQueue.length > 0) {
+    const request = requestQueue.shift();
+    if (!request) continue;
+    
+    const { action, params, resolve, reject } = request;
+    
+    // Rate limiting: wait if needed
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+      await new Promise(r => setTimeout(r, MIN_REQUEST_INTERVAL - timeSinceLastRequest));
+    }
+    
+    try {
+      lastRequestTime = Date.now();
+      
+      const { data, error: fnError } = await supabase.functions.invoke('bybit-api', {
+        body: { action, params },
+      });
+
+      if (fnError) {
+        throw new Error(fnError.message);
+      }
+
+      // Cache the result
+      const cacheKey = getCacheKey(action, params);
+      requestCache.set(cacheKey, {
+        data: data as BybitResponse,
+        timestamp: Date.now(),
+      });
+
+      resolve(data as BybitResponse);
+    } catch (err: any) {
+      reject(err);
+    }
+  }
+  
+  isProcessingQueue = false;
+}
+
+async function queueRequest(action: string, params: Record<string, any>): Promise<BybitResponse | null> {
+  const cacheKey = getCacheKey(action, params);
+  
+  // Check cache first
+  const cached = requestCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < getCacheTTL(action)) {
+    return cached.data;
+  }
+  
+  // Check if there's already a pending request for the same action/params
+  const pending = pendingRequests.get(cacheKey);
+  if (pending) {
+    return pending;
+  }
+  
+  // Create a new promise for this request
+  const promise = new Promise<BybitResponse | null>((resolve, reject) => {
+    requestQueue.push({ action, params, resolve, reject });
+    processQueue();
+  });
+  
+  // Store as pending
+  pendingRequests.set(cacheKey, promise);
+  
+  // Clean up pending request after it resolves
+  promise.finally(() => {
+    pendingRequests.delete(cacheKey);
+  });
+  
+  return promise;
+}
+
 export function useBybitAPI() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState<boolean | null>(null);
+  
+  // Debounce ref to prevent rapid successive calls
+  const lastCallRef = useRef<Record<string, number>>({});
 
   const callBybitAPI = useCallback(
-    async (action: string, params: Record<string, any> = {}): Promise<BybitResponse | null> => {
+    async (action: string, params: Record<string, any> = {}, options?: { skipDebounce?: boolean }): Promise<BybitResponse | null> => {
+      const cacheKey = getCacheKey(action, params);
+      
+      // Debounce check (except for order placement)
+      if (!options?.skipDebounce && !['placeOrder', 'cancelOrder', 'setLeverage'].includes(action)) {
+        const lastCall = lastCallRef.current[cacheKey] || 0;
+        const now = Date.now();
+        if (now - lastCall < 500) {
+          // Return cached data if available
+          const cached = requestCache.get(cacheKey);
+          if (cached) {
+            return cached.data;
+          }
+        }
+        lastCallRef.current[cacheKey] = now;
+      }
+      
       setLoading(true);
       setError(null);
 
       try {
-        const { data, error: fnError } = await supabase.functions.invoke('bybit-api', {
-          body: { action, params },
-        });
-
-        if (fnError) {
-          throw new Error(fnError.message);
-        }
+        const data = await queueRequest(action, params);
 
         // Return payload even on Bybit retCode errors so callers can show exact retMsg/retCode.
-        if (data?.retCode !== 0) {
+        if (data?.retCode !== 0 && data?.retCode !== undefined) {
           const msg = data?.retMsg || data?.error || 'Bybit API error';
-          setError(msg);
-          return data as BybitResponse;
+          // Don't set error for rate limiting - it will resolve on retry
+          if (data.retCode !== 10006) {
+            setError(msg);
+          }
+          return data;
         }
 
-        return data as BybitResponse;
+        return data;
       } catch (err: any) {
         const msg = err?.message || 'Erro desconhecido';
         setError(msg);
@@ -155,26 +284,27 @@ export function useBybitAPI() {
         stopLoss?: number;
       }
     ) => {
+      // Always skip cache/debounce for order placement
       return callBybitAPI('placeOrder', {
         symbol,
         side,
         qty,
         ...options,
-      });
+      }, { skipDebounce: true });
     },
     [callBybitAPI]
   );
 
   const cancelOrder = useCallback(
     async (symbol: string, orderId: string) => {
-      return callBybitAPI('cancelOrder', { symbol, orderId });
+      return callBybitAPI('cancelOrder', { symbol, orderId }, { skipDebounce: true });
     },
     [callBybitAPI]
   );
 
   const setLeverage = useCallback(
     async (symbol: string, leverage: number) => {
-      return callBybitAPI('setLeverage', { symbol, leverage });
+      return callBybitAPI('setLeverage', { symbol, leverage }, { skipDebounce: true });
     },
     [callBybitAPI]
   );
@@ -189,7 +319,7 @@ export function useBybitAPI() {
         qty,
         orderType: 'Market',
         reduceOnly: true,
-      });
+      }, { skipDebounce: true });
     },
     [callBybitAPI]
   );
@@ -200,9 +330,13 @@ export function useBybitAPI() {
     let failed = 0;
     const errors: string[] = [];
 
+    // Process positions sequentially to avoid rate limiting
     for (const pos of positions) {
       const qty = parseFloat(pos.size);
       if (qty > 0) {
+        // Wait a bit between close orders to avoid rate limiting
+        await new Promise(r => setTimeout(r, 200));
+        
         const result = await closePosition(pos.symbol, pos.side, qty);
         if (result?.retCode === 0) {
           success++;
@@ -224,6 +358,11 @@ export function useBybitAPI() {
     [callBybitAPI]
   );
 
+  // Clear cache function for manual refresh
+  const clearCache = useCallback(() => {
+    requestCache.clear();
+  }, []);
+
   return {
     loading,
     error,
@@ -241,5 +380,6 @@ export function useBybitAPI() {
     closePosition,
     closeAllPositions,
     getKlines,
+    clearCache,
   };
 }

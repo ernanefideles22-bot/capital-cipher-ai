@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useBybitAPI } from './useBybitAPI';
 
 interface WalletInfo {
@@ -27,6 +27,11 @@ const notifyListeners = () => {
   listeners.forEach((listener) => listener());
 };
 
+// Global state to prevent multiple instances from fetching simultaneously
+let isFetchingGlobal = false;
+let lastGlobalFetch = 0;
+const MIN_FETCH_INTERVAL = 3000; // Minimum 3 seconds between fetches
+
 export function useBybitAccount(): BybitAccountState {
   const { loading, connected, testConnection, getWalletBalance, getPositions } = useBybitAPI();
   const [wallet, setWallet] = useState<WalletInfo | null>(null);
@@ -38,33 +43,56 @@ export function useBybitAccount(): BybitAccountState {
   });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [, forceUpdate] = useState({});
+  const mountedRef = useRef(true);
 
   // Subscribe to changes
   useEffect(() => {
     const listener = () => forceUpdate({});
     listeners.add(listener);
-    return () => { listeners.delete(listener); };
+    return () => { 
+      listeners.delete(listener);
+      mountedRef.current = false;
+    };
   }, []);
 
   const refreshData = useCallback(async () => {
     if (!isRealMode) return;
     
+    // Prevent concurrent fetches across all instances
+    const now = Date.now();
+    if (isFetchingGlobal || (now - lastGlobalFetch) < MIN_FETCH_INTERVAL) {
+      return;
+    }
+    
+    isFetchingGlobal = true;
+    lastGlobalFetch = now;
     setIsRefreshing(true);
+    
     try {
+      // First test connection
       const isConnected = await testConnection();
       
-      if (isConnected) {
+      if (isConnected && mountedRef.current) {
+        // Fetch wallet and positions sequentially to avoid rate limiting
         const walletData = await getWalletBalance();
-        if (walletData) {
+        if (walletData && mountedRef.current) {
           setWallet(walletData);
         }
         
+        // Small delay between calls
+        await new Promise(r => setTimeout(r, 100));
+        
         const positionsData = await getPositions();
-        setPositions(positionsData);
-        setLastUpdate(new Date());
+        if (mountedRef.current) {
+          setPositions(positionsData);
+          setLastUpdate(new Date());
+        }
       }
     } finally {
-      setIsRefreshing(false);
+      isFetchingGlobal = false;
+      if (mountedRef.current) {
+        setIsRefreshing(false);
+      }
     }
   }, [isRealMode, testConnection, getWalletBalance, getPositions]);
 
@@ -79,19 +107,26 @@ export function useBybitAccount(): BybitAccountState {
     notifyListeners();
   }, [isRealMode]);
 
-  // Initial fetch and auto-refresh every 2 seconds for more responsive updates
+  // Initial fetch and auto-refresh every 5 seconds (reduced from 2s to avoid rate limiting)
   useEffect(() => {
     if (!isRealMode) return;
     
-    // Initial fetch
-    refreshData();
+    mountedRef.current = true;
     
-    // Auto-refresh every 2 seconds for real-time feel
+    // Initial fetch with small delay to let component mount
+    const initialFetch = setTimeout(() => {
+      refreshData();
+    }, 500);
+    
+    // Auto-refresh every 5 seconds
     const interval = setInterval(() => {
       refreshData();
-    }, 2000);
+    }, 5000);
     
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialFetch);
+      clearInterval(interval);
+    };
   }, [isRealMode, refreshData]);
 
   return {
