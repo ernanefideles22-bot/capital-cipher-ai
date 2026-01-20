@@ -923,6 +923,32 @@ export const useAutonomousBot = ({
     const analysis = await analyzeAllPairs();
     
     if (analysis?.bestOpportunities?.length > 0) {
+      // Log all opportunities for transparency
+      addLog('INFO', `📊 Analisando ${analysis.bestOpportunities.length} oportunidades encontradas...`);
+      
+      // Log why opportunities are rejected
+      const rejectedOpps = analysis.bestOpportunities.filter(o => 
+        o.confidence < rules.minConfidence || 
+        o.score < rules.minScore ||
+        (o.recommendation !== 'BUY' && o.recommendation !== 'SELL')
+      );
+      
+      if (rejectedOpps.length > 0) {
+        rejectedOpps.forEach(o => {
+          const reasons: string[] = [];
+          if (o.confidence < rules.minConfidence) {
+            reasons.push(`conf ${o.confidence}% < ${rules.minConfidence}%`);
+          }
+          if (o.score < rules.minScore) {
+            reasons.push(`score ${o.score} < ${rules.minScore}`);
+          }
+          if (o.recommendation !== 'BUY' && o.recommendation !== 'SELL') {
+            reasons.push(`sinal: ${o.recommendation}`);
+          }
+          addLog('INFO', `⏸️ ${o.symbol}: ${reasons.join(' | ')}`);
+        });
+      }
+      
       // Filter valid opportunities
       const validOpportunities = analysis.bestOpportunities
         .filter(o => 
@@ -932,9 +958,12 @@ export const useAutonomousBot = ({
         )
         .sort((a, b) => (b.confidence * b.score) - (a.confidence * a.score)); // Sort by combined metric
 
-      addLog('AI', `📈 ${validOpportunities.length} oportunidades válidas (conf >= ${rules.minConfidence}%)`);
+      addLog('AI', `📈 ${validOpportunities.length} oportunidades válidas (conf >= ${rules.minConfidence}%, score >= ${rules.minScore})`);
 
-      if (validOpportunities.length === 0) return;
+      if (validOpportunities.length === 0) {
+        addLog('INFO', '💤 Aguardando sinais mais fortes para executar trades...');
+        return;
+      }
 
       // Calculate intelligent capital allocation across opportunities
       addLog('AI', `🎯 Fracionando capital entre ${validOpportunities.length} melhores entradas...`);
@@ -955,6 +984,7 @@ export const useAutonomousBot = ({
           continue;
         }
 
+        addLog('TRADE', `🚀 Executando: ${opp.recommendation} ${opp.symbol} | Conf: ${opp.confidence}% | Score: ${opp.score}`);
         const trade = await executeOpportunity(opp, allocatedAmount);
         if (trade) {
           tradesExecuted++;
@@ -967,6 +997,8 @@ export const useAutonomousBot = ({
       if (tradesExecuted > 0) {
         addLog('SUCCESS', `✅ ${tradesExecuted} trades executados com capital fracionado`);
       }
+    } else {
+      addLog('INFO', '🔍 Nenhuma oportunidade encontrada neste ciclo');
     }
   }, [analyzeAllPairs, executeOpportunity, canTrade, rules, addLog, calculateCapitalAllocation]);
 
