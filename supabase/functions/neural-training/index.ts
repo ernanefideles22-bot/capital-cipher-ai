@@ -211,18 +211,58 @@ serve(async (req) => {
         neuralState = newState;
       }
 
-      // Get unlearned experiences
+      // First, import any closed trades that haven't been converted to experiences
+      const { data: existingExpTradeIds } = await supabase
+        .from("trade_experiences")
+        .select("trade_id")
+        .eq("user_id", user.id);
+      
+      const processedTradeIds = new Set((existingExpTradeIds || []).map(e => e.trade_id).filter(Boolean));
+
+      // Get closed trades not yet converted to experiences
+      const { data: closedTrades } = await supabase
+        .from("trades")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "CLOSED")
+        .not("exit_price", "is", null);
+      
+      const newTradesForExp = (closedTrades || []).filter((t: any) => !processedTradeIds.has(t.id));
+      
+      // Convert and insert new trades as experiences
+      if (newTradesForExp.length > 0) {
+        console.log(`Importing ${newTradesForExp.length} historical trades as experiences...`);
+        
+        const newExperiences = newTradesForExp.map((trade: any) => ({
+          user_id: user.id,
+          trade_id: trade.id,
+          symbol: trade.symbol,
+          side: trade.side,
+          entry_price: trade.entry_price,
+          exit_price: trade.exit_price,
+          pnl: trade.pnl,
+          pnl_percentage: trade.pnl_percentage,
+          outcome: trade.pnl > 0 ? 'WIN' : trade.pnl < 0 ? 'LOSS' : 'BREAKEVEN',
+          ai_confidence: trade.ai_confidence,
+          strategy_used: trade.strategy || 'DAYTRADE',
+          learned: false,
+        }));
+
+        await supabase.from("trade_experiences").insert(newExperiences);
+      }
+
+      // Get ALL unlearned experiences (including just-imported ones)
       const { data: unlearnedExperiences, error: expError } = await supabase
         .from("trade_experiences")
         .select("*")
         .eq("user_id", user.id)
         .eq("learned", false)
         .order("created_at", { ascending: true })
-        .limit(50);
+        .limit(100); // Increased limit for batch processing
 
       if (expError) throw expError;
 
-      const experiencesToProcess = newExperiences || unlearnedExperiences || [];
+      const experiencesToProcess = unlearnedExperiences || [];
 
       if (experiencesToProcess.length === 0) {
         return new Response(JSON.stringify({
