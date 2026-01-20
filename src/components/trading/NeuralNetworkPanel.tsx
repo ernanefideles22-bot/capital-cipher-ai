@@ -13,7 +13,9 @@ import {
   Target,
   Sparkles,
   RefreshCw,
-  Network
+  Network,
+  Power,
+  Download,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -229,10 +231,16 @@ export const NeuralNetworkPanel = ({ className }: { className?: string }) => {
     neuralState, 
     trainingHistory, 
     isTraining, 
+    isImporting,
     isLoading,
+    autoTrainingEnabled,
+    lastTrainingTime,
+    pendingExperiences,
     train,
-    refreshState 
-  } = useNeuralNetwork();
+    refreshState,
+    importHistoricalTrades,
+    toggleAutoTraining,
+  } = useNeuralNetwork({ enableAutoTraining: true });
 
   const strategyData = useMemo(() => {
     if (!neuralState?.strategy_weights) return [];
@@ -279,52 +287,94 @@ export const NeuralNetworkPanel = ({ className }: { className?: string }) => {
       <CardHeader className="pb-2 border-b border-border/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20">
-              <Brain className="w-5 h-5 text-purple-400" />
+            <div className={cn(
+              "p-2 rounded-lg",
+              autoTrainingEnabled 
+                ? "bg-gradient-to-br from-green-500/20 to-emerald-500/20 animate-pulse" 
+                : "bg-gradient-to-br from-purple-500/20 to-blue-500/20"
+            )}>
+              <Brain className={cn(
+                "w-5 h-5",
+                autoTrainingEnabled ? "text-green-400" : "text-purple-400"
+              )} />
             </div>
             <div>
-              <CardTitle className="text-base">Rede Neural AI</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                Rede Neural AI
+                {autoTrainingEnabled && (
+                  <Badge variant="outline" className="border-green-500/50 text-green-400 text-[10px] animate-pulse">
+                    AUTO
+                  </Badge>
+                )}
+              </CardTitle>
               <p className="text-xs text-muted-foreground">
-                {neuralState?.total_epochs || 0} épocas de treinamento
+                {neuralState?.total_epochs || 0} épocas • {pendingExperiences} pendentes
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Badge 
               variant="outline" 
               className={cn(
-                'text-xs',
-                isTraining ? 'border-yellow-500/50 text-yellow-400' : 'border-green-500/50 text-green-400'
+                'text-xs cursor-pointer transition-colors',
+                autoTrainingEnabled 
+                  ? 'border-green-500/50 text-green-400 hover:bg-green-500/10' 
+                  : 'border-muted text-muted-foreground hover:bg-muted/20'
               )}
+              onClick={toggleAutoTraining}
             >
-              {isTraining ? (
+              {autoTrainingEnabled ? (
                 <>
-                  <Zap className="w-3 h-3 mr-1 animate-pulse" />
-                  Treinando
+                  <Zap className="w-3 h-3 mr-1" />
+                  ON
                 </>
               ) : (
                 <>
-                  <Activity className="w-3 h-3 mr-1" />
-                  Ativo
+                  <Power className="w-3 h-3 mr-1" />
+                  OFF
                 </>
               )}
             </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => train()}
-              disabled={isTraining}
-              className="text-xs"
-            >
-              {isTraining ? (
-                <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
-              ) : (
-                <Sparkles className="w-3 h-3 mr-1" />
-              )}
-              Treinar
-            </Button>
           </div>
         </div>
+        
+        {/* Training Controls */}
+        <div className="flex items-center gap-1 mt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => importHistoricalTrades()}
+            disabled={isImporting || isTraining}
+            className="text-xs flex-1"
+          >
+            {isImporting ? (
+              <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+            ) : (
+              <Download className="w-3 h-3 mr-1" />
+            )}
+            Importar Histórico
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => train()}
+            disabled={isTraining || isImporting}
+            className="text-xs flex-1"
+          >
+            {isTraining ? (
+              <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+            ) : (
+              <Sparkles className="w-3 h-3 mr-1" />
+            )}
+            Treinar Agora
+          </Button>
+        </div>
+        
+        {lastTrainingTime && (
+          <p className="text-[10px] text-muted-foreground text-center mt-1">
+            Último treino: {lastTrainingTime.toLocaleTimeString()}
+          </p>
+        )}
       </CardHeader>
 
       <CardContent className="p-3">
