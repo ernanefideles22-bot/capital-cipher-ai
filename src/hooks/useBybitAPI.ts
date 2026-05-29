@@ -55,6 +55,18 @@ interface OrderHistory {
   cumExecValue: string;
 }
 
+const REAL_TRADING_ENABLED = import.meta.env.VITE_ENABLE_REAL_TRADING === 'true';
+const REAL_TRADING_DISABLED_MESSAGE = 'Real trading is disabled. Set VITE_ENABLE_REAL_TRADING=true only after server-side risk controls are active.';
+
+function blockedRealTradingResponse(action: string): BybitResponse {
+  return {
+    retCode: -9001,
+    retMsg: REAL_TRADING_DISABLED_MESSAGE,
+    error: `Blocked sensitive Bybit action: ${action}`,
+    time: Date.now(),
+  };
+}
+
 // Global rate limiting and caching
 const requestQueue: Array<{
   action: string;
@@ -176,6 +188,16 @@ export function useBybitAPI() {
   // Debounce ref to prevent rapid successive calls
   const lastCallRef = useRef<Record<string, number>>({});
 
+  const blockIfRealTradingDisabled = useCallback((action: string): BybitResponse | null => {
+    if (REAL_TRADING_ENABLED) {
+      return null;
+    }
+
+    const blocked = blockedRealTradingResponse(action);
+    setError(blocked.retMsg || REAL_TRADING_DISABLED_MESSAGE);
+    return blocked;
+  }, []);
+
   const callBybitAPI = useCallback(
     async (action: string, params: Record<string, any> = {}, options?: { skipDebounce?: boolean }): Promise<BybitResponse | null> => {
       const cacheKey = getCacheKey(action, params);
@@ -284,6 +306,9 @@ export function useBybitAPI() {
         stopLoss?: number;
       }
     ) => {
+      const blocked = blockIfRealTradingDisabled('placeOrder');
+      if (blocked) return blocked;
+
       // Always skip cache/debounce for order placement
       return callBybitAPI('placeOrder', {
         symbol,
@@ -292,25 +317,34 @@ export function useBybitAPI() {
         ...options,
       }, { skipDebounce: true });
     },
-    [callBybitAPI]
+    [callBybitAPI, blockIfRealTradingDisabled]
   );
 
   const cancelOrder = useCallback(
     async (symbol: string, orderId: string) => {
+      const blocked = blockIfRealTradingDisabled('cancelOrder');
+      if (blocked) return blocked;
+
       return callBybitAPI('cancelOrder', { symbol, orderId }, { skipDebounce: true });
     },
-    [callBybitAPI]
+    [callBybitAPI, blockIfRealTradingDisabled]
   );
 
   const setLeverage = useCallback(
     async (symbol: string, leverage: number) => {
+      const blocked = blockIfRealTradingDisabled('setLeverage');
+      if (blocked) return blocked;
+
       return callBybitAPI('setLeverage', { symbol, leverage }, { skipDebounce: true });
     },
-    [callBybitAPI]
+    [callBybitAPI, blockIfRealTradingDisabled]
   );
 
   const closePosition = useCallback(
     async (symbol: string, side: 'Buy' | 'Sell', qty: number) => {
+      const blocked = blockIfRealTradingDisabled('closePosition');
+      if (blocked) return blocked;
+
       // To close a position, we place an opposite market order
       const closeSide = side === 'Buy' ? 'Sell' : 'Buy';
       return callBybitAPI('placeOrder', {
@@ -321,10 +355,15 @@ export function useBybitAPI() {
         reduceOnly: true,
       }, { skipDebounce: true });
     },
-    [callBybitAPI]
+    [callBybitAPI, blockIfRealTradingDisabled]
   );
 
   const closeAllPositions = useCallback(async (): Promise<{ success: number; failed: number; errors: string[] }> => {
+    if (!REAL_TRADING_ENABLED) {
+      setError(REAL_TRADING_DISABLED_MESSAGE);
+      return { success: 0, failed: 1, errors: [REAL_TRADING_DISABLED_MESSAGE] };
+    }
+
     const positions = await getPositions();
     let success = 0;
     let failed = 0;
@@ -367,6 +406,7 @@ export function useBybitAPI() {
     loading,
     error,
     connected,
+    realTradingEnabled: REAL_TRADING_ENABLED,
     testConnection,
     getWalletBalance,
     getTicker,
