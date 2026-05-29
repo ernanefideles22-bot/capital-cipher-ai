@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280" role="img" aria-label="4Asas Trading logo">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#fef3c7" stop-opacity="0.9"/>
+      <stop offset="45%" stop-color="#facc15" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fff7ad"/>
+      <stop offset="35%" stop-color="#facc15"/>
+      <stop offset="70%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#92400e"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#bef264"/>
+      <stop offset="100%" stop-color="#166534"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#facc15" flood-opacity="0.75"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#000" flood-opacity="0.8"/>
+    </filter>
+  </defs>
+  <rect width="720" height="280" fill="#020617"/>
+  <ellipse cx="360" cy="145" rx="300" ry="85" fill="url(#glow)" opacity="0.45"/>
+  <ellipse cx="360" cy="145" rx="285" ry="70" fill="none" stroke="#facc15" stroke-width="14" transform="rotate(-8 360 145)" opacity="0.95" filter="url(#shadow)"/>
+  <ellipse cx="360" cy="145" rx="235" ry="48" fill="none" stroke="#fde68a" stroke-width="4" transform="rotate(-8 360 145)" opacity="0.7"/>
+  <g transform="translate(125 70)" filter="url(#shadow)">
+    <rect x="0" y="64" width="44" height="92" rx="4" fill="url(#blue)" stroke="#fde68a" stroke-width="3"/>
+    <rect x="55" y="43" width="44" height="113" rx="4" fill="url(#blue)" stroke="#fde68a" stroke-width="3"/>
+    <rect x="110" y="14" width="48" height="142" rx="4" fill="url(#green)" stroke="#fde68a" stroke-width="3"/>
+    <path d="M22 44 L77 22 L134 -8" stroke="#facc15" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="22" cy="44" r="17" fill="#0ea5e9" stroke="#fef08a" stroke-width="2"/>
+    <circle cx="77" cy="22" r="17" fill="#0ea5e9" stroke="#fef08a" stroke-width="2"/>
+    <circle cx="134" cy="-8" r="20" fill="#84cc16" stroke="#fef08a" stroke-width="2"/>
+  </g>
+  <g transform="translate(300 52)" opacity="0.92">
+    <circle cx="95" cy="64" r="56" fill="#07111f" stroke="url(#gold)" stroke-width="5"/>
+    <path d="M39 64h112M95 8c-28 32-28 80 0 112M95 8c28 32 28 80 0 112M53 31c26 14 58 14 84 0M53 97c26-14 58-14 84 0" fill="none" stroke="#facc15" stroke-width="3" opacity="0.85"/>
+  </g>
+  <text x="150" y="210" font-family="Arial Black, Impact, system-ui, sans-serif" font-size="118" font-style="italic" font-weight="900" fill="url(#gold)" stroke="#713f12" stroke-width="3" filter="url(#shadow)">4ASES</text>
+  <text x="512" y="232" font-family="Arial, system-ui, sans-serif" font-size="27" font-weight="900" letter-spacing="3" fill="#fde68a">TRADING</text>
+</svg>
