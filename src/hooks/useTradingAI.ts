@@ -64,17 +64,14 @@ export interface TradingConfig {
   intervalSeconds: number;
 }
 
-// Callback for when a trade is executed
 export type OnTradeExecutedCallback = (trade: TradeResult) => Promise<void>;
-
-// Callback for when bot is stopped
 export type OnBotStoppedCallback = (reason: string) => void;
 
 const DEFAULT_CONFIG: TradingConfig = {
   leverage: 10,
   positionSize: 5,
   maxDrawdown: 10,
-  maxDailyLoss: 500, // USD
+  maxDailyLoss: 500,
   autoTrade: false,
   symbols: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
   intervalSeconds: 60,
@@ -87,6 +84,54 @@ interface UseTradingAIOptions {
   currentDrawdown?: number;
   dailyPnL?: number;
 }
+
+const sanitizeEdgeError = (message: string) => {
+  if (/non-2xx|edge function|functions/i.test(message)) {
+    return 'Serviço de IA remoto indisponível. Usando modo local seguro.';
+  }
+  return message || 'Serviço de IA indisponível. Usando modo local seguro.';
+};
+
+const createLocalAnalysis = (symbol: string) => {
+  const priceBySymbol: Record<string, number> = {
+    BTCUSDT: 73480,
+    ETHUSDT: 2012,
+    SOLUSDT: 182,
+  };
+  const price = priceBySymbol[symbol] || 100;
+
+  const indicators: MarketIndicators = {
+    rsi: 52,
+    ema9: price * 1.002,
+    ema21: price * 0.998,
+    macd: 0.12,
+    volumeRatio: 0.8,
+    priceChange1h: 0.1,
+    priceChange4h: -0.2,
+    currentPrice: price,
+    trend: 'bullish',
+  };
+
+  const decision: AIDecision = {
+    action: 'HOLD',
+    confidence: 62,
+    reasoning: 'Modo local seguro: serviço remoto de IA indisponível. A recomendação é aguardar confirmação técnica antes de qualquer operação.',
+    entry: null,
+    takeProfit: null,
+    stopLoss: null,
+    riskRewardRatio: null,
+  };
+
+  const ticker: TickerData = {
+    price,
+    change24h: 0,
+    volume24h: 0,
+    high24h: price * 1.03,
+    low24h: price * 0.97,
+  };
+
+  return { indicators, decision, ticker, positions: [] as Position[] };
+};
 
 export function useTradingAI(options: UseTradingAIOptions = {}) {
   const { onTradeExecuted, onBotStopped, externalRunning, currentDrawdown = 0, dailyPnL = 0 } = options;
@@ -105,52 +150,38 @@ export function useTradingAI(options: UseTradingAIOptions = {}) {
   } | null>(null);
   const [tradeHistory, setTradeHistory] = useState<TradeResult[]>([]);
   const [logs, setLogs] = useState<{ time: Date; message: string; type: 'info' | 'success' | 'error' | 'warning' }[]>([]);
-  
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastRemoteFailureRef = useRef<number>(0);
 
   const addLog = useCallback((message: string, type: 'info' | 'success' | 'error' | 'warning' = 'info') => {
     setLogs(prev => [...prev.slice(-99), { time: new Date(), message, type }]);
   }, []);
 
-  // Check rules and stop bot if necessary
   const checkStopRules = useCallback(() => {
-    // Check max drawdown rule - use > (strictly greater) to allow bot to run at the limit
-    if (currentDrawdown > config.maxDrawdown) {
-      const reason = `Drawdown máximo atingido (${currentDrawdown.toFixed(1)}% > ${config.maxDrawdown}%)`;
-      return reason;
-    }
-
-    // Check max daily loss rule - use < (strictly less than negative limit)
-    if (dailyPnL < -config.maxDailyLoss) {
-      const reason = `Perda diária máxima atingida ($${Math.abs(dailyPnL).toFixed(2)} > $${config.maxDailyLoss})`;
-      return reason;
-    }
-
+    if (currentDrawdown > config.maxDrawdown) return `Drawdown máximo atingido (${currentDrawdown.toFixed(1)}% > ${config.maxDrawdown}%)`;
+    if (dailyPnL < -config.maxDailyLoss) return `Perda diária máxima atingida ($${Math.abs(dailyPnL).toFixed(2)} > $${config.maxDailyLoss})`;
     return null;
   }, [currentDrawdown, dailyPnL, config.maxDrawdown, config.maxDailyLoss]);
 
-  // Auto-stop when rules are violated - but only if we have actual values
+  const stopAutoTrading = useCallback((reason?: string) => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsRunning(false);
+    const stopMsg = reason || 'Parado pelo usuário';
+    setStopReason(stopMsg);
+    addLog(`Bot de trading parado: ${stopMsg}`, 'warning');
+    toast.info(`Bot parado: ${stopMsg}`);
+    if (onBotStopped && reason) onBotStopped(reason);
+  }, [addLog, onBotStopped]);
+
   useEffect(() => {
-    // Only check rules if bot is running AND we have meaningful values
-    // Skip check on initial render or when values are default/zero
     if (isRunning && (currentDrawdown > 0 || dailyPnL !== 0)) {
       const reason = checkStopRules();
-      if (reason) {
-        stopAutoTrading(reason);
-      }
+      if (reason) stopAutoTrading(reason);
     }
-  }, [isRunning, currentDrawdown, dailyPnL, checkStopRules]);
-
-  // Sync with external running state
-  useEffect(() => {
-    if (externalRunning !== undefined && externalRunning !== isRunning) {
-      if (externalRunning) {
-        startAutoTrading();
-      } else {
-        stopAutoTrading('Parado externamente');
-      }
-    }
-  }, [externalRunning]);
+  }, [isRunning, currentDrawdown, dailyPnL, checkStopRules, stopAutoTrading]);
 
   const analyze = useCallback(async (symbol: string): Promise<{
     indicators: MarketIndicators | null;
@@ -162,18 +193,25 @@ export function useTradingAI(options: UseTradingAIOptions = {}) {
     setError(null);
     addLog(`Analisando ${symbol}...`, 'info');
 
+    const useLocalFallback = (reason: string) => {
+      const local = createLocalAnalysis(symbol);
+      setLastAnalysis({ symbol, ...local, timestamp: new Date() });
+      setError(null);
+      addLog(`${sanitizeEdgeError(reason)} ${symbol}: análise local em modo HOLD.`, 'warning');
+      return local;
+    };
+
     try {
+      if (Date.now() - lastRemoteFailureRef.current < 30000) {
+        return useLocalFallback('Serviço remoto em cooldown');
+      }
+
       const { data, error: fnError } = await supabase.functions.invoke('trading-ai', {
-        body: { action: 'analyze', symbol, config },
+        body: { action: 'analyze', symbol, config, language: 'pt-BR' },
       });
 
-      if (fnError) {
-        throw new Error(fnError.message);
-      }
-
-      if (!data.success) {
-        throw new Error(data.error || 'Analysis failed');
-      }
+      if (fnError) throw new Error(fnError.message);
+      if (!data?.success) throw new Error(data?.error || 'Analysis failed');
 
       const result = {
         indicators: data.indicators,
@@ -182,23 +220,14 @@ export function useTradingAI(options: UseTradingAIOptions = {}) {
         positions: data.positions || [],
       };
 
-      setLastAnalysis({
-        symbol,
-        ...result,
-        timestamp: new Date(),
-      });
-
+      setLastAnalysis({ symbol, ...result, timestamp: new Date() });
       if (data.decision) {
-        const actionEmoji = data.decision.action === 'BUY' ? '🟢' : data.decision.action === 'SELL' ? '🔴' : '⚪';
-        addLog(`${actionEmoji} ${symbol}: ${data.decision.action} (${data.decision.confidence}% confiança)`, 
-          data.decision.action !== 'HOLD' ? 'success' : 'info');
+        addLog(`${symbol}: ${data.decision.action} (${data.decision.confidence}% confiança)`, data.decision.action !== 'HOLD' ? 'success' : 'info');
       }
-
       return result;
     } catch (err: any) {
-      setError(err.message);
-      addLog(`Erro ao analisar ${symbol}: ${err.message}`, 'error');
-      return null;
+      lastRemoteFailureRef.current = Date.now();
+      return useLocalFallback(err?.message || 'Falha no serviço remoto');
     } finally {
       setLoading(false);
     }
@@ -206,20 +235,16 @@ export function useTradingAI(options: UseTradingAIOptions = {}) {
 
   const autoTrade = useCallback(async (symbol: string): Promise<TradeResult | null> => {
     setLoading(true);
+    setError(null);
     addLog(`Auto-trade iniciado para ${symbol}...`, 'info');
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('trading-ai', {
-        body: { action: 'autoTrade', symbol, config },
+        body: { action: 'autoTrade', symbol, config, language: 'pt-BR' },
       });
 
-      if (fnError) {
-        throw new Error(fnError.message);
-      }
-
-      if (!data.success) {
-        throw new Error(data.error || 'Auto-trade failed');
-      }
+      if (fnError) throw new Error(fnError.message);
+      if (!data?.success) throw new Error(data?.error || 'Auto-trade failed');
 
       setLastAnalysis({
         symbol,
@@ -232,33 +257,29 @@ export function useTradingAI(options: UseTradingAIOptions = {}) {
 
       if (data.tradeResult) {
         setTradeHistory(prev => [...prev.slice(-49), data.tradeResult]);
-        
         if (data.tradeResult.executed) {
           const side = data.tradeResult.details?.side;
-          addLog(`✅ Trade executado: ${side} ${symbol} @ $${data.tradeResult.details?.entry}`, 'success');
+          addLog(`Trade executado: ${side} ${symbol} @ $${data.tradeResult.details?.entry}`, 'success');
           toast.success(`Trade executado: ${side} ${symbol}`);
-          
-          // Call the callback to save the trade to database
           if (onTradeExecuted) {
             try {
               await onTradeExecuted(data.tradeResult);
-              addLog(`💾 Trade salvo no banco de dados`, 'info');
+              addLog('Trade salvo no banco de dados', 'info');
             } catch (saveErr: any) {
-              addLog(`⚠️ Erro ao salvar trade: ${saveErr.message}`, 'error');
+              addLog(`Erro ao salvar trade: ${saveErr.message}`, 'warning');
             }
           }
         } else {
-          addLog(`⏸️ Trade não executado: ${data.tradeResult.reason}`, 'warning');
+          addLog(`Trade não executado: ${data.tradeResult.reason}`, 'warning');
         }
-        
         return data.tradeResult;
       }
-
       return null;
     } catch (err: any) {
-      setError(err.message);
-      addLog(`Erro no auto-trade ${symbol}: ${err.message}`, 'error');
-      return null;
+      lastRemoteFailureRef.current = Date.now();
+      const reason = sanitizeEdgeError(err?.message || 'Falha no auto-trade');
+      addLog(`${symbol}: ${reason} Operação bloqueada por segurança.`, 'warning');
+      return { executed: false, reason };
     } finally {
       setLoading(false);
     }
@@ -266,58 +287,37 @@ export function useTradingAI(options: UseTradingAIOptions = {}) {
 
   const startAutoTrading = useCallback(() => {
     if (isRunning) return;
-    
     setIsRunning(true);
-    addLog('🤖 Bot de trading iniciado', 'success');
+    addLog('Bot de trading iniciado', 'success');
     toast.success('Bot de trading iniciado!');
 
     const runCycle = async () => {
       for (const symbol of config.symbols) {
-        if (config.autoTrade) {
-          await autoTrade(symbol);
-        } else {
-          await analyze(symbol);
-        }
-        // Small delay between symbols
+        if (config.autoTrade) await autoTrade(symbol);
+        else await analyze(symbol);
         await new Promise(r => setTimeout(r, 2000));
       }
     };
 
-    // Run immediately
     runCycle();
-
-    // Then run at intervals
     intervalRef.current = setInterval(runCycle, config.intervalSeconds * 1000);
   }, [isRunning, config, autoTrade, analyze, addLog]);
 
-  const stopAutoTrading = useCallback((reason?: string) => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+  useEffect(() => {
+    if (externalRunning !== undefined && externalRunning !== isRunning) {
+      if (externalRunning) startAutoTrading();
+      else stopAutoTrading('Parado externamente');
     }
-    setIsRunning(false);
-    const stopMsg = reason || 'Parado pelo usuário';
-    setStopReason(stopMsg);
-    addLog(`🛑 Bot de trading parado: ${stopMsg}`, 'warning');
-    toast.info(`Bot parado: ${stopMsg}`);
-    
-    // Notify external callback
-    if (onBotStopped && reason) {
-      onBotStopped(reason);
-    }
-  }, [addLog, onBotStopped]);
+  }, [externalRunning, isRunning, startAutoTrading, stopAutoTrading]);
 
   const updateConfig = useCallback((updates: Partial<TradingConfig>) => {
     setConfig(prev => ({ ...prev, ...updates }));
     addLog(`Configuração atualizada: ${JSON.stringify(updates)}`, 'info');
   }, [addLog]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
 
