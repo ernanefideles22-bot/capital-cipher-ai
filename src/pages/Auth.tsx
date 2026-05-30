@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Bot, Mail, Lock, User } from 'lucide-react';
+import { Mail, Lock, User } from 'lucide-react';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -40,7 +40,8 @@ const Auth = () => {
     const { error } = await signUp(email, password, displayName);
     
     if (error) {
-      toast.error('Erro ao criar conta: ' + error.message);
+      const alreadyRegistered = error.message.toLowerCase().includes('already registered');
+      toast.error(alreadyRegistered ? 'Esta conta já existe. Vá para Login.' : 'Erro ao criar conta: ' + error.message);
     } else {
       toast.success('Conta criada com sucesso!');
       navigate('/');
@@ -62,9 +63,13 @@ const Auth = () => {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <Bot className="h-8 w-8 text-primary" />
-            <CardTitle className="text-2xl font-bold">Trading Bot AI</CardTitle>
+          <div className="flex flex-col items-center justify-center gap-3 mb-2">
+            <img
+              src="/4asas-logo.svg"
+              alt="4Asas Trading"
+              className="h-24 w-auto max-w-[280px] object-contain"
+            />
+            <CardTitle className="text-2xl font-bold">4Asas Trading</CardTitle>
           </div>
           <CardDescription>
             Faça login ou crie uma conta para acessar seu bot de trading
