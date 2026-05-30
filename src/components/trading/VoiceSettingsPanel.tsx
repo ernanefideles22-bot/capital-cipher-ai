@@ -7,7 +7,6 @@ import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-// Available ElevenLabs voices
 const ELEVENLABS_VOICES = [
   { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah', description: 'Feminina, clara e profissional', lang: 'Multi' },
   { id: 'FGY2WhTYpPnrIDTdsKH5', name: 'Laura', description: 'Feminina, suave e natural', lang: 'Multi' },
@@ -32,8 +31,8 @@ interface VoiceSettings {
 
 const DEFAULT_SETTINGS: VoiceSettings = {
   enabled: true,
-  useElevenLabs: true,
-  voiceId: 'EXAVITQu4vr4xnSDxMaL', // Sarah
+  useElevenLabs: false,
+  voiceId: 'EXAVITQu4vr4xnSDxMaL',
   volume: 0.8,
 };
 
@@ -69,11 +68,27 @@ export const VoiceSettingsPanel = () => {
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
+  const speakWithBrowser = (text: string) => {
+    if (!('speechSynthesis' in window)) {
+      toast.error('Voz não disponível neste navegador.');
+      setIsPlaying(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.volume = settings.volume;
+    utterance.lang = 'pt-BR';
+    utterance.onend = () => setIsPlaying(false);
+    utterance.onerror = () => setIsPlaying(false);
+    window.speechSynthesis.speak(utterance);
+  };
+
   const testVoice = async () => {
     if (isPlaying) return;
     
     setIsPlaying(true);
-    const testText = 'Abrindo posição de compra em Bitcoin com 85% de confiança';
+    const testText = '4Asas Trading: alerta de voz ativo em português.';
     
     try {
       if (settings.useElevenLabs) {
@@ -90,38 +105,27 @@ export const VoiceSettingsPanel = () => {
           }
         );
 
-        if (!response.ok) {
-          throw new Error('Failed to generate voice');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.audioContent) {
+            const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
+            const audio = new Audio(audioUrl);
+            audio.volume = settings.volume;
+            audio.onended = () => setIsPlaying(false);
+            audio.onerror = () => speakWithBrowser(testText);
+            await audio.play();
+            return;
+          }
         }
 
-        const data = await response.json();
-        
-        if (data.audioContent) {
-          const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
-          const audio = new Audio(audioUrl);
-          audio.volume = settings.volume;
-          audio.onended = () => setIsPlaying(false);
-          audio.onerror = () => {
-            setIsPlaying(false);
-            toast.error('Erro ao reproduzir áudio');
-          };
-          await audio.play();
-          return;
-        }
+        toast.warning('ElevenLabs indisponível. Usando voz do navegador.');
       }
       
-      // Fallback to browser TTS
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(testText);
-        utterance.volume = settings.volume;
-        utterance.lang = 'pt-BR';
-        utterance.onend = () => setIsPlaying(false);
-        window.speechSynthesis.speak(utterance);
-      }
+      speakWithBrowser(testText);
     } catch (error) {
-      console.error('Voice test error:', error);
-      toast.error('Erro ao testar voz. Verifique sua conexão.');
-      setIsPlaying(false);
+      console.warn('Voice test fallback:', error);
+      toast.warning('Usando voz do navegador.');
+      speakWithBrowser(testText);
     }
   };
 
@@ -134,7 +138,6 @@ export const VoiceSettingsPanel = () => {
         <h3 className="font-semibold">Alertas de Voz</h3>
       </div>
 
-      {/* Enable Voice Alerts */}
       <div className="flex items-center justify-between">
         <div>
           <Label htmlFor="voice-enabled" className="text-sm font-medium">Alertas de Voz</Label>
@@ -149,11 +152,10 @@ export const VoiceSettingsPanel = () => {
 
       {settings.enabled && (
         <>
-          {/* Use ElevenLabs */}
           <div className="flex items-center justify-between">
             <div>
               <Label htmlFor="use-elevenlabs" className="text-sm font-medium">ElevenLabs (Premium)</Label>
-              <p className="text-xs text-muted-foreground">Vozes profissionais de alta qualidade</p>
+              <p className="text-xs text-muted-foreground">Opcional. Se falhar, usa voz do navegador.</p>
             </div>
             <Switch
               id="use-elevenlabs"
@@ -162,7 +164,6 @@ export const VoiceSettingsPanel = () => {
             />
           </div>
 
-          {/* Voice Selection */}
           {settings.useElevenLabs && (
             <div className="space-y-2">
               <Label className="text-sm font-medium">Escolher Voz</Label>
@@ -192,7 +193,6 @@ export const VoiceSettingsPanel = () => {
             </div>
           )}
 
-          {/* Volume */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium">Volume</Label>
@@ -208,7 +208,6 @@ export const VoiceSettingsPanel = () => {
             />
           </div>
 
-          {/* Test Button */}
           <Button
             variant="outline"
             size="sm"
