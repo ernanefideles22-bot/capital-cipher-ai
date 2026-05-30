@@ -12,7 +12,13 @@ const BYBIT_API_KEY = Deno.env.get("BYBIT_API_KEY") || "";
 const BYBIT_API_SECRET = Deno.env.get("BYBIT_API_SECRET") || "";
 const BYBIT_ENVIRONMENT = Deno.env.get("BYBIT_ENVIRONMENT") || "testnet";
 const ENABLE_REAL_TRADING = Deno.env.get("ENABLE_REAL_TRADING") === "true";
+const REAL_TRADING_CONFIRMATION = Deno.env.get("REAL_TRADING_CONFIRMATION") || "";
 const MAX_LEVERAGE = Number(Deno.env.get("MAX_LEVERAGE") || "3");
+const MAX_ORDER_NOTIONAL_USDT = Number(Deno.env.get("MAX_ORDER_NOTIONAL_USDT") || "5");
+const ALLOWED_TRADING_SYMBOLS = (Deno.env.get("ALLOWED_TRADING_SYMBOLS") || "BTCUSDT")
+  .split(",")
+  .map((symbol) => symbol.trim().toUpperCase())
+  .filter(Boolean);
 const REQUIRE_STOP_LOSS = Deno.env.get("REQUIRE_STOP_LOSS") !== "false";
 const REQUIRE_TAKE_PROFIT = Deno.env.get("REQUIRE_TAKE_PROFIT") !== "false";
 const GLOBAL_KILL_SWITCH = Deno.env.get("GLOBAL_KILL_SWITCH") === "true";
@@ -79,6 +85,12 @@ function validateSymbol(value: unknown): string {
   return symbol;
 }
 
+function assertAllowedTradingSymbol(symbol: string): void {
+  if (!ALLOWED_TRADING_SYMBOLS.includes(symbol)) {
+    throw new Error(`Symbol ${symbol} is not allowed for real trading. Allowed symbols: ${ALLOWED_TRADING_SYMBOLS.join(", ")}`);
+  }
+}
+
 function validateSide(value: unknown): "Buy" | "Sell" {
   if (value !== "Buy" && value !== "Sell") {
     throw new Error("Invalid side");
@@ -112,6 +124,13 @@ function assertActionAllowed(action: unknown): string {
   }
   if (SENSITIVE_ACTIONS.has(action) && !ENABLE_REAL_TRADING) {
     throw new Error("Real trading is disabled server-side. Set ENABLE_REAL_TRADING=true only after risk controls are active.");
+  }
+  if (
+    SENSITIVE_ACTIONS.has(action) &&
+    BYBIT_ENVIRONMENT === "mainnet" &&
+    REAL_TRADING_CONFIRMATION !== "I_UNDERSTAND_REAL_MONEY_RISK"
+  ) {
+    throw new Error("Mainnet trading confirmation missing. Set REAL_TRADING_CONFIRMATION=I_UNDERSTAND_REAL_MONEY_RISK to allow real-money actions.");
   }
   return action;
 }
@@ -184,6 +203,23 @@ async function bybitRequest(endpoint: string, method: string = "GET", params: Re
   const result = await response.json();
   console.log(`Bybit API response: retCode=${result.retCode}, retMsg=${result.retMsg}`);
   return result;
+}
+
+async function getReferencePrice(symbol: string): Promise<number> {
+  const ticker = await bybitRequest("/v5/market/tickers", "GET", { category: "linear", symbol });
+  const lastPrice = Number(ticker?.result?.list?.[0]?.lastPrice);
+  if (!Number.isFinite(lastPrice) || lastPrice <= 0) {
+    throw new Error(`Unable to validate reference price for ${symbol}`);
+  }
+  return lastPrice;
+}
+
+async function assertOrderNotionalLimit(symbol: string, qty: number, orderType: "Market" | "Limit", priceParam: unknown): Promise<void> {
+  const price = orderType === "Limit" ? requirePositiveNumber(priceParam, "price") : await getReferencePrice(symbol);
+  const notional = qty * price;
+  if (notional > MAX_ORDER_NOTIONAL_USDT) {
+    throw new Error(`Order notional ${notional.toFixed(2)} USDT exceeds MAX_ORDER_NOTIONAL_USDT=${MAX_ORDER_NOTIONAL_USDT}.`);
+  }
 }
 
 async function authenticateUser(req: Request): Promise<{ userId: string } | null> {
@@ -278,6 +314,12 @@ serve(async (req) => {
         const qty = requirePositiveNumber(params.qty, "qty");
         const reduceOnly = params.reduceOnly === true || params.reduceOnly === "true";
 
+        assertAllowedTradingSymbol(symbol);
+
+        if (!reduceOnly) {
+          await assertOrderNotionalLimit(symbol, qty, orderType, params.price);
+        }
+
         if (!reduceOnly && REQUIRE_STOP_LOSS && !params.stopLoss) {
           throw new Error("stopLoss is required for opening orders");
         }
@@ -300,7 +342,7 @@ serve(async (req) => {
         if (params.stopLoss) orderParams.stopLoss = requirePositiveNumber(params.stopLoss, "stopLoss").toString();
         if (orderType === "Limit") orderParams.price = requirePositiveNumber(params.price, "price").toString();
 
-        console.log(`Placing Bybit order: ${side} ${symbol} qty=${qty} reduceOnly=${reduceOnly}`);
+        console.log(`Placing Bybit order: ${side} ${symbol} qty=${qty} reduceOnly=${reduceOnly} cap=${MAX_ORDER_NOTIONAL_USDT}USDT`);
         result = await bybitRequest("/v5/order/create", "POST", orderParams);
         break;
       }
@@ -314,10 +356,12 @@ serve(async (req) => {
         break;
 
       case "setLeverage": {
+        const symbol = validateSymbol(params.symbol);
+        assertAllowedTradingSymbol(symbol);
         const leverage = validateLeverage(params.leverage);
         result = await bybitRequest("/v5/position/set-leverage", "POST", {
           category: "linear",
-          symbol: validateSymbol(params.symbol),
+          symbol,
           buyLeverage: leverage.toString(),
           sellLeverage: leverage.toString(),
         });
