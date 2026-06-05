@@ -222,7 +222,12 @@ async function assertOrderNotionalLimit(symbol: string, qty: number, orderType: 
   }
 }
 
-async function authenticateUser(req: Request): Promise<{ userId: string } | null> {
+interface AuthContext {
+  userId: string;
+  supabaseClient: any;
+}
+
+async function authenticateUser(req: Request): Promise<AuthContext | null> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) return null;
 
@@ -234,7 +239,7 @@ async function authenticateUser(req: Request): Promise<{ userId: string } | null
 
   const { data: { user }, error } = await supabaseClient.auth.getUser();
   if (error || !user) return null;
-  return { userId: user.id };
+  return { userId: user.id, supabaseClient };
 }
 
 serve(async (req) => {
@@ -253,6 +258,47 @@ serve(async (req) => {
 
     const action = assertActionAllowed(body.action);
     const params = isPlainObject(body.params) ? body.params : {};
+
+    // Server-side risk validation for sensitive actions
+    if (SENSITIVE_ACTIONS.has(action)) {
+      // 1. Fetch user profile config
+      const { data: profile, error: profileErr } = await auth.supabaseClient
+        .from("profiles")
+        .select("bot_config")
+        .eq("user_id", auth.userId)
+        .single();
+
+      if (profileErr || !profile) {
+        throw new Error("Unable to retrieve user bot configuration.");
+      }
+
+      const botConfig = profile.bot_config || {};
+      const mode = botConfig.mode || "paper";
+
+      // Reject real trading orders if user profile is set to paper mode
+      if (mode !== "real") {
+        throw new Error("Real trading is disabled for your profile. Please switch to Real Mode in settings.");
+      }
+
+      // 2. Fetch user bot stats
+      const { data: stats, error: statsErr } = await auth.supabaseClient
+        .from("bot_stats")
+        .select("daily_pnl, max_drawdown")
+        .eq("user_id", auth.userId)
+        .single();
+
+      if (statsErr || !stats) {
+        throw new Error("Unable to retrieve user trading statistics.");
+      }
+
+      const maxDrawdownLimit = Number(botConfig.maxDrawdown || 10);
+      const currentDrawdown = Number(stats.max_drawdown || 0);
+
+      // Reject if current drawdown exceeds config limit
+      if (currentDrawdown >= maxDrawdownLimit) {
+        throw new Error(`Trading blocked: Drawdown limit reached (${currentDrawdown.toFixed(2)}% >= ${maxDrawdownLimit}%).`);
+      }
+    }
 
     let result;
 
