@@ -167,6 +167,8 @@ const Index = () => {
     },
     sendRealOrders: isRealMode, // Send real orders when in real mode
     leverage: config.leverage,
+    activeTrades: isRealMode ? positions.map(p => ({ symbol: p.symbol, status: 'OPEN' })) : trades.filter(t => t.status === 'OPEN'),
+    closedTrades: trades.filter(t => t.status === 'CLOSED'),
   });
 
   // Toggle bot status based on mode - now uses autonomous bot
@@ -286,6 +288,12 @@ const Index = () => {
 
     setIsClosingAll(true);
     try {
+      // Pause autonomous bot immediately to prevent it from opening new positions
+      if (isRealMode && autonomousBot.isRunning) {
+        autonomousBot.stop();
+        realData.setBotStatus('PAUSED');
+      }
+
       const result = await bybitAPI.closeAllPositions();
       
       if (result.success > 0) {

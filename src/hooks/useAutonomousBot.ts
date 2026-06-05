@@ -64,6 +64,8 @@ interface TradingRules {
   minScore: number;
   riskPerTradePercent: number;
   cooldownBetweenTradesMs: number;
+  lossCooldownMs: number;
+  maxOrdersPerMinute: number;
   // Capital allocation settings
   maxCapitalPercentPerTrade: number; // Max % of capital for a single trade
   capitalAllocationMode: 'equal' | 'weighted' | 'tiered'; // How to distribute capital
@@ -140,6 +142,8 @@ interface UseAutonomousBotOptions {
   tradingRules?: Partial<TradingRules>;
   sendRealOrders?: boolean;
   leverage?: number;
+  activeTrades?: Array<{ symbol: string; status?: string }>;
+  closedTrades?: Trade[];
 }
 
 const DEFAULT_RULES: TradingRules = {
@@ -150,6 +154,8 @@ const DEFAULT_RULES: TradingRules = {
   minScore: 65,
   riskPerTradePercent: 2,
   cooldownBetweenTradesMs: 10000, // 10 seconds between trades
+  lossCooldownMs: 5 * 60 * 1000, // 5 minutes cooldown after loss
+  maxOrdersPerMinute: 5, // max 5 orders per minute
   // Capital allocation
   maxCapitalPercentPerTrade: 25, // Max 25% per trade
   capitalAllocationMode: 'weighted', // Distribute based on confidence
@@ -171,6 +177,8 @@ export const useAutonomousBot = ({
   tradingRules = {},
   sendRealOrders = false,
   leverage = 5,
+  activeTrades,
+  closedTrades,
 }: UseAutonomousBotOptions) => {
   const rules: TradingRules = { ...DEFAULT_RULES, ...tradingRules, minConfidence, maxConcurrentTrades };
   const [isRunning, setIsRunning] = useState(false);
@@ -185,9 +193,14 @@ export const useAutonomousBot = ({
   
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isRunningRef = useRef(false);
+  
+  // Rate limiting tracker (timestamps of trades placed in the last 60 seconds)
+  const orderTimestampsRef = useRef<number[]>([]);
 
   // Bybit API hook for real order execution
   const bybitAPI = useBybitAPI();
+
+  const currentOpenTrades = activeTrades || openTrades;
 
   // Check if trading is allowed based on rules
   const canTrade = useCallback((): { allowed: boolean; reason?: string } => {
@@ -203,7 +216,7 @@ export const useAutonomousBot = ({
     }
 
     // Check max concurrent trades
-    if (openTrades.length >= rules.maxConcurrentTrades) {
+    if (currentOpenTrades.length >= rules.maxConcurrentTrades) {
       return { allowed: false, reason: `Limite de ${rules.maxConcurrentTrades} trades simultâneos` };
     }
 
@@ -214,8 +227,29 @@ export const useAutonomousBot = ({
       return { allowed: false, reason: `Aguardando cooldown (${remaining}s)` };
     }
 
+    // Check rate limit: max 5 orders per minute
+    const now = Date.now();
+    orderTimestampsRef.current = orderTimestampsRef.current.filter(t => now - t < 60000);
+    if (orderTimestampsRef.current.length >= 5) {
+      return { allowed: false, reason: `Limite de 5 ordens por minuto atingido (Rate Limit)` };
+    }
+
+    // Check loss cooldown: pause for 5 minutes if last trade was a loss
+    if (closedTrades && closedTrades.length > 0) {
+      const lastClosed = closedTrades.find(t => t.status === 'CLOSED');
+      if (lastClosed && lastClosed.pnl !== undefined && lastClosed.pnl < 0 && lastClosed.closedAt) {
+        const closedTime = new Date(lastClosed.closedAt).getTime();
+        const timeSinceLoss = now - closedTime;
+        const cooldownMs = 5 * 60 * 1000; // 5 minutes
+        if (timeSinceLoss < cooldownMs) {
+          const remaining = Math.ceil((cooldownMs - timeSinceLoss) / 1000);
+          return { allowed: false, reason: `Bloqueio pós-prejuízo ativo (Aguarde ${remaining}s)` };
+        }
+      }
+    }
+
     return { allowed: true };
-  }, [currentDrawdown, dailyPnL, accountBalance, openTrades.length, lastTradeTime, rules]);
+  }, [currentDrawdown, dailyPnL, accountBalance, currentOpenTrades.length, lastTradeTime, rules, closedTrades]);
 
   const addLog = useCallback((level: LogEntry['level'], message: string) => {
     const log: LogEntry = {
@@ -259,7 +293,7 @@ export const useAutonomousBot = ({
 
     if (rules.capitalAllocationMode === 'equal') {
       // Equal distribution among all opportunities
-      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - openTrades.length);
+      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - currentOpenTrades.length);
       const capitalPerTrade = Math.min(availableCapital / maxTrades, maxPerTrade);
       
       for (let i = 0; i < maxTrades; i++) {
@@ -267,7 +301,7 @@ export const useAutonomousBot = ({
       }
     } else if (rules.capitalAllocationMode === 'weighted') {
       // Weighted distribution based on confidence
-      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - openTrades.length);
+      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - currentOpenTrades.length);
       const topOpps = rankedOpps.slice(0, maxTrades);
       
       const totalWeight = topOpps.reduce((sum, o) => sum + (o.confidence * o.score) / 100, 0);
@@ -281,7 +315,7 @@ export const useAutonomousBot = ({
     } else if (rules.capitalAllocationMode === 'tiered') {
       // Tiered: Top pick gets 40%, 2nd gets 30%, 3rd gets 20%, rest 10% each
       const tiers = [0.40, 0.30, 0.20, 0.10];
-      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - openTrades.length);
+      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - currentOpenTrades.length);
       
       let remainingCapital = availableCapital;
       for (let i = 0; i < maxTrades && remainingCapital > 0; i++) {
@@ -299,7 +333,7 @@ export const useAutonomousBot = ({
     });
 
     return allocation;
-  }, [getAvailableCapital, accountBalance, rules, openTrades.length, addLog]);
+  }, [getAvailableCapital, accountBalance, rules, currentOpenTrades.length, addLog]);
 
   // Fallback local analysis using technical indicators when AI credits are exhausted
   const performLocalAnalysis = useCallback((): MultiPairAnalysisResult => {
@@ -738,6 +772,30 @@ export const useAutonomousBot = ({
       addLog('INFO', `${opportunity.symbol}: Score ${opportunity.score} abaixo do mínimo (${rules.minScore})`);
       return null;
     }
+    
+    // Check for loss cooldown
+    if (closedTrades && closedTrades.length > 0) {
+      const lastLoss = closedTrades
+        .filter(t => t.symbol === opportunity.symbol && t.pnl !== undefined && t.pnl < 0)
+        .sort((a, b) => {
+          const aTime = a.closedAt ? new Date(a.closedAt).getTime() : 0;
+          const bTime = b.closedAt ? new Date(b.closedAt).getTime() : 0;
+          return bTime - aTime;
+        })[0];
+
+      if (lastLoss && lastLoss.closedAt && (Date.now() - new Date(lastLoss.closedAt).getTime() < rules.lossCooldownMs)) {
+        addLog('INFO', `${opportunity.symbol}: Em cooldown após loss`);
+        return null;
+      }
+    }
+
+    // Rate limit check: orders per minute
+    const oneMinuteAgo = Date.now() - 60000;
+    const ordersInLastMinute = orderTimestampsRef.current.filter(ts => ts > oneMinuteAgo).length;
+    if (ordersInLastMinute >= rules.maxOrdersPerMinute) {
+      addLog('WARN', `⚠️ Limite de ${rules.maxOrdersPerMinute} ordens/min atingido`);
+      return null;
+    }
 
     // Only execute BUY or SELL signals
     if (opportunity.recommendation !== 'BUY' && opportunity.recommendation !== 'SELL') {
@@ -745,7 +803,7 @@ export const useAutonomousBot = ({
     }
 
     // Check if we already have an open trade for this symbol
-    const existingTrade = openTrades.find(t => t.symbol === opportunity.symbol && t.status === 'OPEN');
+    const existingTrade = currentOpenTrades.find(t => t.symbol === opportunity.symbol && t.status === 'OPEN');
     if (existingTrade) {
       addLog('INFO', `${opportunity.symbol}: Já existe trade aberto para este par`);
       return null;
@@ -883,6 +941,10 @@ export const useAutonomousBot = ({
     setOpenTrades(prev => [...prev, trade]);
     setLastTradeTime(Date.now());
     setTradesToday(prev => prev + 1);
+    
+    // Rate limiting: log order timestamp
+    orderTimestampsRef.current.push(Date.now());
+    
     onTradeOpened?.(trade);
 
     const decision: AIDecision = {
@@ -908,7 +970,7 @@ export const useAutonomousBot = ({
     toast.success(`Trade executado: ${side} ${opportunity.symbol} (${opportunity.confidence}%)${sendRealOrders ? ' - ORDEM REAL' : ''}`);
 
     return trade;
-  }, [canTrade, rules, openTrades, accountBalance, onTradeOpened, onDecisionMade, addLog, sendRealOrders, leverage, bybitAPI]);
+  }, [canTrade, rules, activeTrades, closedTrades, accountBalance, onTradeOpened, onDecisionMade, addLog, sendRealOrders, leverage, bybitAPI]);
 
   const runAnalysisCycle = useCallback(async () => {
     if (!isRunningRef.current) return;
