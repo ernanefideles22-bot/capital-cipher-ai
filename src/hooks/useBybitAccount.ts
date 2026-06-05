@@ -47,7 +47,13 @@ export function useBybitAccount(): BybitAccountState {
 
   // Subscribe to changes
   useEffect(() => {
-    const listener = () => forceUpdate({});
+    const listener = () => {
+      const saved = localStorage.getItem('bybit-mode') === 'real';
+      setIsRealMode((current) => {
+        if (current === saved) return current;
+        return saved;
+      });
+    };
     listeners.add(listener);
     return () => { 
       listeners.delete(listener);
