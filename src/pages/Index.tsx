@@ -36,6 +36,7 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Settings, Play, Pause, Brain, Loader2, XCircle } from 'lucide-react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -457,117 +458,133 @@ const Index = () => {
 
 
         {/* Price Tickers - Click to select */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {Object.values(marketData).map((data) => (
-            <PriceCard 
-              key={data.symbol} 
-              data={data} 
-              isSelected={data.symbol === selectedSymbol}
-              onClick={() => setSelectedSymbol(data.symbol)}
-              priceAnimation={priceAnimations[data.symbol]}
-              sparklineData={sparklines[data.symbol]}
-              indicators={technicalIndicators[data.symbol]}
-            />
-          ))}
-        </section>
+        <ErrorBoundary>
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {Object.values(marketData).map((data) => (
+              <PriceCard 
+                key={data.symbol} 
+                data={data} 
+                isSelected={data.symbol === selectedSymbol}
+                onClick={() => setSelectedSymbol(data.symbol)}
+                priceAnimation={priceAnimations[data.symbol]}
+                sparklineData={sparklines[data.symbol]}
+                indicators={technicalIndicators[data.symbol]}
+              />
+            ))}
+          </section>
+        </ErrorBoundary>
 
         {/* Stats Grid */}
-        <section>
-          <StatsGrid stats={botStats} isRealMode={isRealMode} walletBalance={wallet?.totalEquity} />
-        </section>
+        <ErrorBoundary>
+          <section>
+            <StatsGrid stats={botStats} isRealMode={isRealMode} walletBalance={wallet?.totalEquity} />
+          </section>
+        </ErrorBoundary>
 
         {/* Chart + Right Panel */}
-        <section className="grid grid-cols-1 xl:grid-cols-4 gap-3">
-          <div className="xl:col-span-3 min-h-[380px]">
-            <TradingViewChart symbol={selectedSymbol} height={380} />
-          </div>
-          <div className="flex flex-col gap-3">
-            <TradingAIPanel 
-              onTradeExecuted={isRealMode ? handleRealTradeExecuted : undefined}
-              externalRunning={botStats.status === 'RUNNING'}
-              onBotStatusChange={handleBotStatusChange}
-              currentDrawdown={botStats.currentDrawdown}
-              dailyPnL={botStats.dailyPnL}
-            />
-            <DrawdownGauge stats={botStats} config={config} />
-          </div>
-        </section>
+        <ErrorBoundary>
+          <section className="grid grid-cols-1 xl:grid-cols-4 gap-3">
+            <div className="xl:col-span-3 min-h-[380px]">
+              <TradingViewChart symbol={selectedSymbol} height={380} />
+            </div>
+            <div className="flex flex-col gap-3">
+              <TradingAIPanel 
+                onTradeExecuted={isRealMode ? handleRealTradeExecuted : undefined}
+                externalRunning={botStats.status === 'RUNNING'}
+                onBotStatusChange={handleBotStatusChange}
+                currentDrawdown={botStats.currentDrawdown}
+                dailyPnL={botStats.dailyPnL}
+              />
+              <DrawdownGauge stats={botStats} config={config} />
+            </div>
+          </section>
+        </ErrorBoundary>
 
         {/* AI Memory Panel - Only visible in demo mode */}
         {!isRealMode && (
-          <section>
-            <AIMemoryPanel isRealMode={isRealMode} />
-          </section>
+          <ErrorBoundary>
+            <section>
+              <AIMemoryPanel isRealMode={isRealMode} />
+            </section>
+          </ErrorBoundary>
         )}
 
         {/* Bot Opportunities Panel - Only in Real Mode */}
         {isRealMode && (
-          <section>
-            <BotOpportunitiesPanel
-              opportunities={autonomousBot.opportunities}
-              lastAnalysis={autonomousBot.lastAnalysis}
-              isAnalyzing={autonomousBot.isAnalyzing}
-              isRunning={autonomousBot.isRunning}
-              onAnalyzeNow={autonomousBot.analyzeNow}
-              onExecuteOpportunity={autonomousBot.executeOpportunity}
-              marketPrices={Object.fromEntries(
-                Object.values(marketData).map(d => [d.symbol, d.price])
-              )}
-              lastExecutedSymbol={lastExecutedSymbol}
-            />
-          </section>
+          <ErrorBoundary>
+            <section>
+              <BotOpportunitiesPanel
+                opportunities={autonomousBot.opportunities}
+                lastAnalysis={autonomousBot.lastAnalysis}
+                isAnalyzing={autonomousBot.isAnalyzing}
+                isRunning={autonomousBot.isRunning}
+                onAnalyzeNow={autonomousBot.analyzeNow}
+                onExecuteOpportunity={autonomousBot.executeOpportunity}
+                marketPrices={Object.fromEntries(
+                  Object.values(marketData).map(d => [d.symbol, d.price])
+                )}
+                lastExecutedSymbol={lastExecutedSymbol}
+              />
+            </section>
+          </ErrorBoundary>
         )}
 
         {/* Bybit Positions Panel - Only in Real Mode */}
         {isRealMode && positions.length > 0 && (
-          <section>
-            <BybitPositionsPanel 
-              positions={positions} 
-              loading={bybitLoading}
-              onRefresh={refreshBybit}
-            />
-          </section>
+          <ErrorBoundary>
+            <section>
+              <BybitPositionsPanel 
+                positions={positions} 
+                loading={bybitLoading}
+                onRefresh={refreshBybit}
+              />
+            </section>
+          </ErrorBoundary>
         )}
 
         {/* Main Content Grid */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          {/* Left Column - Neural Network & Trades */}
-          <div className="lg:col-span-2 flex flex-col gap-3">
-            {/* Neural Network Panel - Real learning AI */}
-            {isRealMode && <NeuralNetworkPanel />}
-            {/* AI Learning Panel - Only visible in demo mode */}
-            {!isRealMode && <AILearningPanel isRealMode={isRealMode} />}
-            <TradesTable trades={trades} isRealMode={isRealMode} />
-          </div>
+        <ErrorBoundary>
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            {/* Left Column - Neural Network & Trades */}
+            <div className="lg:col-span-2 flex flex-col gap-3">
+              {/* Neural Network Panel - Real learning AI */}
+              {isRealMode && <NeuralNetworkPanel />}
+              {/* AI Learning Panel - Only visible in demo mode */}
+              {!isRealMode && <AILearningPanel isRealMode={isRealMode} />}
+              <TradesTable trades={trades} isRealMode={isRealMode} />
+            </div>
 
-          {/* Right Column - AI Analysis, Decisions */}
-          <div className="flex flex-col gap-3">
-            <AIMarketAnalysis 
-              marketData={
-                marketData[selectedSymbol] || {
-                  symbol: selectedSymbol,
-                  price: 0,
-                  change24h: 0,
-                  volume24h: 0,
-                  high24h: 0,
-                  low24h: 0,
+            {/* Right Column - AI Analysis, Decisions */}
+            <div className="flex flex-col gap-3">
+              <AIMarketAnalysis 
+                marketData={
+                  marketData[selectedSymbol] || {
+                    symbol: selectedSymbol,
+                    price: 0,
+                    change24h: 0,
+                    volume24h: 0,
+                    high24h: 0,
+                    low24h: 0,
+                  }
                 }
-              }
-            />
-            <AIDecisionsPanel decisions={aiDecisions} isRealMode={isRealMode} />
-          </div>
-        </section>
+              />
+              <AIDecisionsPanel decisions={aiDecisions} isRealMode={isRealMode} />
+            </div>
+          </section>
+        </ErrorBoundary>
 
         {/* Logs + News + Bybit Orders */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <LogsPanel 
-            logs={logs} 
-            isRealMode={isRealMode} 
-            onClearLogs={isRealMode ? realData.clearLogs : demoClearLogs}
-          />
-          <LiveNewsPanel />
-          <BybitOrdersPanel isConnected={isRealMode && !!wallet} />
-        </section>
+        <ErrorBoundary>
+          <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <LogsPanel 
+              logs={logs} 
+              isRealMode={isRealMode} 
+              onClearLogs={isRealMode ? realData.clearLogs : demoClearLogs}
+            />
+            <LiveNewsPanel />
+            <BybitOrdersPanel isConnected={isRealMode && !!wallet} />
+          </section>
+        </ErrorBoundary>
 
         {/* Footer */}
         <footer className="text-center py-3 text-xs text-muted-foreground border-t border-border/50">
