@@ -3,131 +3,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { MarketData, Trade, AIDecision, LogEntry } from '@/types/trading';
 import { useBybitAPI } from '@/hooks/useBybitAPI';
+import {
+  useLocalTechnicalAnalysis,
+  type BotOpportunity,
+  type MultiPairAnalysisResult,
+  type TechnicalIndicatorsPayload
+} from '@/hooks/useLocalTechnicalAnalysis';
+import { useBotRisk, type TradingRules } from '@/hooks/useBotRisk';
 
-export interface InstitutionalSignals {
-  orderFlow: 'ACCUMULATION' | 'DISTRIBUTION' | 'NEUTRAL';
-  smartMoney: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-  volumeProfile: 'ABOVE_POC' | 'BELOW_POC' | 'AT_POC';
-  liquidityZone: 'NEAR_LIQUIDITY' | 'CLEAR';
-}
-
-export interface BotOpportunity {
-  symbol: string;
-  recommendation: 'BUY' | 'SELL' | 'HOLD';
-  confidence: number;
-  score: number;
-  reasoning: string;
-  entryPrice: number;
-  stopLoss: number;
-  takeProfit: number;
-  riskRewardRatio: number;
-  neuralAdjusted?: boolean;
-  originalScore?: number;
-  originalConfidence?: number;
-  suggestedStrategy?: 'SCALP' | 'DAYTRADE' | 'SWING';
-  professionalStrategy?: 'MOMENTUM' | 'MEAN_REVERSION' | 'BREAKOUT' | 'INSTITUTIONAL_FLOW' | 'WYCKOFF' | 'SMART_MONEY';
-  institutionalSignals?: InstitutionalSignals;
-}
-
-export interface InstitutionalBias {
-  overall: 'RISK_ON' | 'RISK_OFF' | 'NEUTRAL';
-  btcDominance: 'RISING' | 'FALLING' | 'STABLE';
-  marketPhase: 'ACCUMULATION' | 'MARKUP' | 'DISTRIBUTION' | 'MARKDOWN';
-}
-
-export interface MultiPairAnalysisResult {
-  success: boolean;
-  timestamp: string;
-  pairsAnalyzed: number;
-  bestOpportunities: BotOpportunity[];
-  marketOverview: string;
-  topPick: {
-    symbol: string;
-    action: 'BUY' | 'SELL';
-    urgency: 'high' | 'medium' | 'low';
-  } | null;
-  // Neural network info
-  neuralEnabled?: boolean;
-  neuralEpochs?: number;
-  neuralAccuracy?: number;
-  neuralBonuses?: string[];
-  neuralInsights?: string;
-  // Institutional analysis
-  institutionalBias?: InstitutionalBias;
-}
-
-interface TradingRules {
-  maxDrawdownPercent: number;
-  maxDailyLossPercent: number;
-  maxConcurrentTrades: number;
-  minConfidence: number;
-  minScore: number;
-  riskPerTradePercent: number;
-  cooldownBetweenTradesMs: number;
-  lossCooldownMs: number;
-  maxOrdersPerMinute: number;
-  // Capital allocation settings
-  maxCapitalPercentPerTrade: number; // Max % of capital for a single trade
-  capitalAllocationMode: 'equal' | 'weighted' | 'tiered'; // How to distribute capital
-  reserveCapitalPercent: number; // % of capital to keep as reserve
-}
-
-// Technical indicators interface for edge function
-export interface TechnicalIndicatorsPayload {
-  rsi: number;
-  rsiSignal: string;
-  // Stochastic RSI
-  stochRsiK?: number;
-  stochRsiD?: number;
-  stochRsiSignal?: string;
-  // MACD
-  macd: number;
-  macdSignal: number;
-  macdHistogram: number;
-  macdTrend: string;
-  // Bollinger
-  bollingerUpper: number;
-  bollingerMiddle: number;
-  bollingerLower: number;
-  bollingerPosition: string;
-  bollingerWidth: number;
-  // EMAs
-  ema9: number;
-  ema21: number;
-  ema50: number;
-  emaTrend: string;
-  // ADX
-  adx?: number;
-  plusDI?: number;
-  minusDI?: number;
-  adxTrend?: string;
-  adxDirection?: string;
-  // Ichimoku
-  ichimokuTenkan?: number;
-  ichimokuKijun?: number;
-  ichimokuSenkouA?: number;
-  ichimokuSenkouB?: number;
-  ichimokuChikou?: number;
-  ichimokuSignal?: string;
-  ichimokuCloudPosition?: string;
-  // Volume
-  volumeRatio: number;
-  volumeSignal: string;
-  // ATR
-  atr: number;
-  atrPercent: number;
-  // Momentum
-  momentum: number;
-  momentumSignal: string;
-  // Support/Resistance
-  nearestSupport: number;
-  nearestResistance: number;
-  // Overall
-  overallSignal: string;
-  signalStrength: number;
-}
-
-interface UseAutonomousBotOptions {
+export interface UseAutonomousBotOptions {
   marketData: Record<string, MarketData>;
   technicalIndicators?: Record<string, TechnicalIndicatorsPayload>;
   onTradeOpened?: (trade: Trade) => void;
@@ -202,55 +86,6 @@ export const useAutonomousBot = ({
 
   const currentOpenTrades = activeTrades || openTrades;
 
-  // Check if trading is allowed based on rules
-  const canTrade = useCallback((): { allowed: boolean; reason?: string } => {
-    // Check drawdown limit
-    if (currentDrawdown >= rules.maxDrawdownPercent) {
-      return { allowed: false, reason: `Drawdown máximo atingido (${currentDrawdown.toFixed(1)}% >= ${rules.maxDrawdownPercent}%)` };
-    }
-
-    // Check daily loss limit
-    const dailyLossPercent = accountBalance > 0 ? (Math.abs(Math.min(0, dailyPnL)) / accountBalance) * 100 : 0;
-    if (dailyLossPercent >= rules.maxDailyLossPercent) {
-      return { allowed: false, reason: `Perda diária máxima atingida (${dailyLossPercent.toFixed(1)}% >= ${rules.maxDailyLossPercent}%)` };
-    }
-
-    // Check max concurrent trades
-    if (currentOpenTrades.length >= rules.maxConcurrentTrades) {
-      return { allowed: false, reason: `Limite de ${rules.maxConcurrentTrades} trades simultâneos` };
-    }
-
-    // Check cooldown between trades
-    const timeSinceLastTrade = Date.now() - lastTradeTime;
-    if (timeSinceLastTrade < rules.cooldownBetweenTradesMs) {
-      const remaining = Math.ceil((rules.cooldownBetweenTradesMs - timeSinceLastTrade) / 1000);
-      return { allowed: false, reason: `Aguardando cooldown (${remaining}s)` };
-    }
-
-    // Check rate limit: max 5 orders per minute
-    const now = Date.now();
-    orderTimestampsRef.current = orderTimestampsRef.current.filter(t => now - t < 60000);
-    if (orderTimestampsRef.current.length >= 5) {
-      return { allowed: false, reason: `Limite de 5 ordens por minuto atingido (Rate Limit)` };
-    }
-
-    // Check loss cooldown: pause for 5 minutes if last trade was a loss
-    if (closedTrades && closedTrades.length > 0) {
-      const lastClosed = closedTrades.find(t => t.status === 'CLOSED');
-      if (lastClosed && lastClosed.pnl !== undefined && lastClosed.pnl < 0 && lastClosed.closedAt) {
-        const closedTime = new Date(lastClosed.closedAt).getTime();
-        const timeSinceLoss = now - closedTime;
-        const cooldownMs = 5 * 60 * 1000; // 5 minutes
-        if (timeSinceLoss < cooldownMs) {
-          const remaining = Math.ceil((cooldownMs - timeSinceLoss) / 1000);
-          return { allowed: false, reason: `Bloqueio pós-prejuízo ativo (Aguarde ${remaining}s)` };
-        }
-      }
-    }
-
-    return { allowed: true };
-  }, [currentDrawdown, dailyPnL, accountBalance, currentOpenTrades.length, lastTradeTime, rules, closedTrades]);
-
   const addLog = useCallback((level: LogEntry['level'], message: string) => {
     const log: LogEntry = {
       id: crypto.randomUUID(),
@@ -261,349 +96,19 @@ export const useAutonomousBot = ({
     onLog?.(log);
   }, [onLog]);
 
-  // Calculate available capital for new trades
-  const getAvailableCapital = useCallback((): number => {
-    const totalCapital = accountBalance;
-    const reserveAmount = (totalCapital * rules.reserveCapitalPercent) / 100;
-    const availableForTrading = totalCapital - reserveAmount - allocatedCapital;
-    return Math.max(0, availableForTrading);
-  }, [accountBalance, rules.reserveCapitalPercent, allocatedCapital]);
-
-  // Calculate capital allocation for multiple opportunities based on confidence/score
-  const calculateCapitalAllocation = useCallback((
-    opportunities: BotOpportunity[]
-  ): Map<string, number> => {
-    const allocation = new Map<string, number>();
-    if (opportunities.length === 0) return allocation;
-
-    const availableCapital = getAvailableCapital();
-    const maxPerTrade = (accountBalance * rules.maxCapitalPercentPerTrade) / 100;
-
-    addLog('AI', `💰 Capital disponível: $${availableCapital.toFixed(2)} | Max por trade: $${maxPerTrade.toFixed(2)}`);
-
-    if (availableCapital <= 0) {
-      addLog('WARN', '⚠️ Sem capital disponível para novas posições');
-      return allocation;
-    }
-
-    // Sort by confidence * score for priority ranking
-    const rankedOpps = [...opportunities]
-      .filter(o => o.recommendation === 'BUY' || o.recommendation === 'SELL')
-      .sort((a, b) => (b.confidence * b.score) - (a.confidence * a.score));
-
-    if (rules.capitalAllocationMode === 'equal') {
-      // Equal distribution among all opportunities
-      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - currentOpenTrades.length);
-      const capitalPerTrade = Math.min(availableCapital / maxTrades, maxPerTrade);
-      
-      for (let i = 0; i < maxTrades; i++) {
-        allocation.set(rankedOpps[i].symbol, capitalPerTrade);
-      }
-    } else if (rules.capitalAllocationMode === 'weighted') {
-      // Weighted distribution based on confidence
-      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - currentOpenTrades.length);
-      const topOpps = rankedOpps.slice(0, maxTrades);
-      
-      const totalWeight = topOpps.reduce((sum, o) => sum + (o.confidence * o.score) / 100, 0);
-      
-      for (const opp of topOpps) {
-        const weight = (opp.confidence * opp.score) / 100;
-        const proportion = weight / totalWeight;
-        const capitalForTrade = Math.min(availableCapital * proportion, maxPerTrade);
-        allocation.set(opp.symbol, capitalForTrade);
-      }
-    } else if (rules.capitalAllocationMode === 'tiered') {
-      // Tiered: Top pick gets 40%, 2nd gets 30%, 3rd gets 20%, rest 10% each
-      const tiers = [0.40, 0.30, 0.20, 0.10];
-      const maxTrades = Math.min(rankedOpps.length, rules.maxConcurrentTrades - currentOpenTrades.length);
-      
-      let remainingCapital = availableCapital;
-      for (let i = 0; i < maxTrades && remainingCapital > 0; i++) {
-        const tierPercent = tiers[Math.min(i, tiers.length - 1)];
-        const capitalForTrade = Math.min(availableCapital * tierPercent, maxPerTrade, remainingCapital);
-        allocation.set(rankedOpps[i].symbol, capitalForTrade);
-        remainingCapital -= capitalForTrade;
-      }
-    }
-
-    // Log allocation summary
-    allocation.forEach((capital, symbol) => {
-      const opp = rankedOpps.find(o => o.symbol === symbol);
-      addLog('INFO', `📊 ${symbol}: $${capital.toFixed(2)} (${((capital / accountBalance) * 100).toFixed(1)}%) | Conf: ${opp?.confidence}%`);
-    });
-
-    return allocation;
-  }, [getAvailableCapital, accountBalance, rules, currentOpenTrades.length, addLog]);
-
-  // Fallback local analysis using technical indicators when AI credits are exhausted
-  const performLocalAnalysis = useCallback((): MultiPairAnalysisResult => {
-    addLog('INFO', '🔧 Executando análise técnica avançada local (Stoch RSI, ADX, Ichimoku)...');
-    
-    const opportunities: BotOpportunity[] = [];
-    
-    Object.entries(marketData).forEach(([symbol, data]) => {
-      const indicators = technicalIndicators?.[symbol];
-      if (!indicators || data.price <= 0) return;
-      
-      let score = 50;
-      let confidence = 50;
-      let recommendation: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
-      const reasons: string[] = [];
-      let bullishSignals = 0;
-      let bearishSignals = 0;
-      
-      // === RSI Analysis ===
-      if (indicators.rsi < 30) {
-        score += 12;
-        confidence += 8;
-        bullishSignals++;
-        reasons.push(`RSI oversold (${indicators.rsi.toFixed(1)})`);
-      } else if (indicators.rsi > 70) {
-        score += 12;
-        confidence += 8;
-        bearishSignals++;
-        reasons.push(`RSI overbought (${indicators.rsi.toFixed(1)})`);
-      }
-      
-      // === Stochastic RSI Analysis (NEW) ===
-      if (indicators.stochRsiSignal) {
-        if (indicators.stochRsiSignal === 'OVERSOLD') {
-          score += 10;
-          confidence += 6;
-          bullishSignals++;
-          reasons.push(`Stoch RSI oversold (${indicators.stochRsiK?.toFixed(1)})`);
-        } else if (indicators.stochRsiSignal === 'OVERBOUGHT') {
-          score += 10;
-          confidence += 6;
-          bearishSignals++;
-          reasons.push(`Stoch RSI overbought (${indicators.stochRsiK?.toFixed(1)})`);
-        } else if (indicators.stochRsiSignal === 'BULLISH_CROSS') {
-          score += 15;
-          confidence += 10;
-          bullishSignals += 2;
-          reasons.push('Stoch RSI bullish cross');
-        } else if (indicators.stochRsiSignal === 'BEARISH_CROSS') {
-          score += 15;
-          confidence += 10;
-          bearishSignals += 2;
-          reasons.push('Stoch RSI bearish cross');
-        }
-      }
-      
-      // === MACD Analysis ===
-      if (indicators.macdHistogram > 0 && indicators.macdTrend === 'BULLISH') {
-        score += 8;
-        confidence += 5;
-        bullishSignals++;
-        reasons.push('MACD bullish');
-      } else if (indicators.macdHistogram < 0 && indicators.macdTrend === 'BEARISH') {
-        score += 8;
-        confidence += 5;
-        bearishSignals++;
-        reasons.push('MACD bearish');
-      }
-      
-      // === EMA Trend ===
-      if (indicators.emaTrend === 'STRONG_BULLISH') {
-        score += 10;
-        confidence += 6;
-        bullishSignals++;
-        reasons.push('Strong uptrend (EMAs)');
-      } else if (indicators.emaTrend === 'STRONG_BEARISH') {
-        score += 10;
-        confidence += 6;
-        bearishSignals++;
-        reasons.push('Strong downtrend (EMAs)');
-      }
-      
-      // === ADX Analysis (NEW) ===
-      if (indicators.adxTrend && indicators.adxDirection) {
-        const hasStrongTrend = indicators.adxTrend === 'STRONG_TREND' || indicators.adxTrend === 'TRENDING';
-        if (hasStrongTrend) {
-          if (indicators.adxDirection === 'BULLISH') {
-            score += 12;
-            confidence += 8;
-            bullishSignals += 2;
-            reasons.push(`ADX strong bullish (${indicators.adx?.toFixed(1)})`);
-          } else if (indicators.adxDirection === 'BEARISH') {
-            score += 12;
-            confidence += 8;
-            bearishSignals += 2;
-            reasons.push(`ADX strong bearish (${indicators.adx?.toFixed(1)})`);
-          }
-        } else if (indicators.adxTrend === 'NO_TREND') {
-          // Weak trend reduces confidence
-          confidence -= 5;
-        }
-      }
-      
-      // === Ichimoku Cloud Analysis (NEW) ===
-      if (indicators.ichimokuSignal) {
-        if (indicators.ichimokuSignal === 'STRONG_BULLISH') {
-          score += 15;
-          confidence += 10;
-          bullishSignals += 2;
-          reasons.push('Ichimoku strong bullish');
-        } else if (indicators.ichimokuSignal === 'BULLISH') {
-          score += 10;
-          confidence += 6;
-          bullishSignals++;
-          reasons.push('Ichimoku bullish');
-        } else if (indicators.ichimokuSignal === 'STRONG_BEARISH') {
-          score += 15;
-          confidence += 10;
-          bearishSignals += 2;
-          reasons.push('Ichimoku strong bearish');
-        } else if (indicators.ichimokuSignal === 'BEARISH') {
-          score += 10;
-          confidence += 6;
-          bearishSignals++;
-          reasons.push('Ichimoku bearish');
-        }
-      }
-      
-      // Ichimoku Cloud Position
-      if (indicators.ichimokuCloudPosition) {
-        if (indicators.ichimokuCloudPosition === 'ABOVE_CLOUD') {
-          score += 8;
-          bullishSignals++;
-          reasons.push('Price above Ichimoku cloud');
-        } else if (indicators.ichimokuCloudPosition === 'BELOW_CLOUD') {
-          score += 8;
-          bearishSignals++;
-          reasons.push('Price below Ichimoku cloud');
-        }
-      }
-      
-      // === Bollinger Position ===
-      if (indicators.bollingerPosition === 'BELOW_LOWER') {
-        score += 8;
-        bullishSignals++;
-        reasons.push('Below Bollinger lower');
-      } else if (indicators.bollingerPosition === 'ABOVE_UPPER') {
-        score += 8;
-        bearishSignals++;
-        reasons.push('Above Bollinger upper');
-      }
-      
-      // === Volume confirmation ===
-      if (indicators.volumeRatio > 1.5) {
-        score += 5;
-        confidence += 5;
-        reasons.push(`High volume (${indicators.volumeRatio.toFixed(1)}x)`);
-      }
-      
-      // === Signal strength boost ===
-      if (indicators.signalStrength > 70) {
-        score += 8;
-        confidence += 8;
-      }
-      
-      // === Determine recommendation based on signal consensus ===
-      const netSignal = bullishSignals - bearishSignals;
-      const hasConfluence = bullishSignals >= 3 || bearishSignals >= 3;
-      
-      if (netSignal >= 2 && score >= 65 && hasConfluence) {
-        recommendation = 'BUY';
-      } else if (netSignal <= -2 && score >= 65 && hasConfluence) {
-        recommendation = 'SELL';
-      } else if (netSignal >= 3) {
-        recommendation = 'BUY';
-      } else if (netSignal <= -3) {
-        recommendation = 'SELL';
-      }
-      
-      // Bonus for strong confluence
-      if (hasConfluence) {
-        confidence += 10;
-        score += 5;
-      }
-      
-      // === Calculate entry, SL, TP ===
-      const atr = indicators.atr || data.price * 0.02;
-      const entryPrice = data.price;
-      let stopLoss: number;
-      let takeProfit: number;
-      
-      // Use Ichimoku levels if available for better S/R
-      const kumoTop = Math.max(indicators.ichimokuSenkouA || 0, indicators.ichimokuSenkouB || 0);
-      const kumoBottom = Math.min(indicators.ichimokuSenkouA || Infinity, indicators.ichimokuSenkouB || Infinity);
-      
-      if (recommendation === 'BUY') {
-        // Use Ichimoku Kijun or support as SL
-        const ichimokuSL = indicators.ichimokuKijun || kumoBottom;
-        const technicalSL = indicators.nearestSupport || (entryPrice - atr * 2);
-        stopLoss = Math.max(Math.min(ichimokuSL, technicalSL), entryPrice - atr * 2.5);
-        takeProfit = indicators.nearestResistance || (entryPrice + atr * 3);
-      } else if (recommendation === 'SELL') {
-        // Use Ichimoku Kijun or resistance as SL
-        const ichimokuSL = indicators.ichimokuKijun || kumoTop;
-        const technicalSL = indicators.nearestResistance || (entryPrice + atr * 2);
-        stopLoss = Math.min(Math.max(ichimokuSL, technicalSL), entryPrice + atr * 2.5);
-        takeProfit = indicators.nearestSupport || (entryPrice - atr * 3);
-      } else {
-        stopLoss = entryPrice - atr * 1.5;
-        takeProfit = entryPrice + atr * 1.5;
-      }
-      
-      const riskReward = Math.abs(takeProfit - entryPrice) / Math.abs(entryPrice - stopLoss);
-      
-      // === Determine strategy based on indicators ===
-      let suggestedStrategy: 'SCALP' | 'DAYTRADE' | 'SWING' = 'DAYTRADE';
-      let professionalStrategy: BotOpportunity['professionalStrategy'] = 'MOMENTUM';
-      
-      if (indicators.adxTrend === 'STRONG_TREND') {
-        professionalStrategy = 'BREAKOUT';
-        suggestedStrategy = 'SWING';
-      } else if (indicators.ichimokuSignal?.includes('STRONG')) {
-        professionalStrategy = 'INSTITUTIONAL_FLOW';
-        suggestedStrategy = 'SWING';
-      } else if (indicators.stochRsiSignal?.includes('CROSS')) {
-        professionalStrategy = 'MOMENTUM';
-        suggestedStrategy = 'SCALP';
-      }
-      
-      // Only add if score is high enough and we have a recommendation
-      if (score >= 60 && recommendation !== 'HOLD') {
-        opportunities.push({
-          symbol,
-          recommendation,
-          confidence: Math.min(95, Math.max(50, confidence)),
-          score: Math.min(100, score),
-          reasoning: reasons.slice(0, 5).join(', ') || 'Technical analysis',
-          entryPrice,
-          stopLoss,
-          takeProfit,
-          riskRewardRatio: riskReward,
-          suggestedStrategy,
-          professionalStrategy,
-        });
-      }
-    });
-    
-    // Sort by score * confidence for best opportunities
-    opportunities.sort((a, b) => (b.score * b.confidence) - (a.score * a.confidence));
-    const topOpps = opportunities.slice(0, 5);
-    
-    const result: MultiPairAnalysisResult = {
-      success: true,
-      timestamp: new Date().toISOString(),
-      pairsAnalyzed: Object.keys(marketData).length,
-      bestOpportunities: topOpps,
-      marketOverview: `Análise técnica avançada: ${topOpps.length} oportunidades (Stoch RSI + ADX + Ichimoku)`,
-      topPick: topOpps.length > 0 ? {
-        symbol: topOpps[0].symbol,
-        action: topOpps[0].recommendation as 'BUY' | 'SELL',
-        urgency: topOpps[0].score >= 80 ? 'high' : topOpps[0].score >= 70 ? 'medium' : 'low',
-      } : null,
-      neuralEnabled: false,
-      neuralInsights: 'Usando análise técnica avançada local (Stochastic RSI, ADX, Ichimoku Cloud)',
-    };
-    
-    addLog('AI', `📊 Análise local avançada: ${topOpps.length} oportunidades (${topOpps.map(o => `${o.symbol}:${o.score}`).join(', ')})`);
-    
-    return result;
-  }, [marketData, technicalIndicators, addLog]);
+  // Instantiate Sub-Hooks
+  const { performLocalAnalysis } = useLocalTechnicalAnalysis();
+  const { canTrade, calculateCapitalAllocation } = useBotRisk({
+    accountBalance,
+    currentDrawdown,
+    dailyPnL,
+    rules,
+    lastTradeTime,
+    currentOpenTrades,
+    closedTrades,
+    orderTimestampsRef,
+    addLog,
+  });
 
   const analyzeAllPairs = useCallback(async (): Promise<MultiPairAnalysisResult | null> => {
     if (Object.keys(marketData).length === 0) {
@@ -630,7 +135,7 @@ export const useAutonomousBot = ({
           preparedData[symbol] = {
             symbol: data.symbol,
             price: data.price,
-            change24h: data.changePercentage24h || 0,
+            change24h: data.change24h || 0,
             volume24h: data.volume24h || 0,
             high24h: data.high24h || data.price,
             low24h: data.low24h || data.price,
@@ -689,12 +194,10 @@ export const useAutonomousBot = ({
         data = result.data;
         fnError = result.error;
       } catch (invokeError: any) {
-        // Capture network/invoke errors including 402
         fnError = invokeError;
         useLocalFallback = true;
       }
 
-      // Check for AI credits exhausted error (402, 401, or any error message)
       const isCreditsError = 
         useLocalFallback ||
         fnError?.message?.includes('402') ||
@@ -708,7 +211,7 @@ export const useAutonomousBot = ({
 
       if (fnError || isCreditsError) {
         addLog('WARN', '⚠️ API indisponível - usando análise técnica local');
-        const localResult = performLocalAnalysis();
+        const localResult = performLocalAnalysis(marketData, technicalIndicators, addLog);
         setLastAnalysis(localResult);
         setOpportunities(localResult.bestOpportunities || []);
         return localResult;
@@ -731,22 +234,20 @@ export const useAutonomousBot = ({
 
         return data;
       } else {
-        // If API fails for any reason, use local analysis
         addLog('WARN', '⚠️ Erro na API - usando análise técnica local');
-        const localResult = performLocalAnalysis();
+        const localResult = performLocalAnalysis(marketData, technicalIndicators, addLog);
         setLastAnalysis(localResult);
         setOpportunities(localResult.bestOpportunities || []);
         return localResult;
       }
     } catch (err) {
-      // On any error, fall back to local analysis
       const message = err instanceof Error ? err.message : 'Erro ao analisar mercado';
       addLog('WARN', `⚠️ ${message} - usando análise técnica local`);
       
-      const localResult = performLocalAnalysis();
+      const localResult = performLocalAnalysis(marketData, technicalIndicators, addLog);
       setLastAnalysis(localResult);
       setOpportunities(localResult.bestOpportunities || []);
-      setError(null); // Clear error since we have a fallback
+      setError(null);
       return localResult;
     } finally {
       setIsAnalyzing(false);
@@ -754,55 +255,26 @@ export const useAutonomousBot = ({
   }, [marketData, technicalIndicators, addLog, performLocalAnalysis]);
 
   const executeOpportunity = useCallback(async (opportunity: BotOpportunity, allocatedCapitalForTrade?: number) => {
-    // Check all trading rules first
     const tradingCheck = canTrade();
     if (!tradingCheck.allowed) {
       addLog('WARN', `⚠️ Trade bloqueado: ${tradingCheck.reason}`);
       return null;
     }
 
-    // Check minimum confidence
     if (opportunity.confidence < rules.minConfidence) {
       addLog('INFO', `${opportunity.symbol}: Confiança ${opportunity.confidence}% abaixo do mínimo (${rules.minConfidence}%)`);
       return null;
     }
 
-    // Check minimum score
     if (opportunity.score < rules.minScore) {
       addLog('INFO', `${opportunity.symbol}: Score ${opportunity.score} abaixo do mínimo (${rules.minScore})`);
       return null;
     }
-    
-    // Check for loss cooldown
-    if (closedTrades && closedTrades.length > 0) {
-      const lastLoss = closedTrades
-        .filter(t => t.symbol === opportunity.symbol && t.pnl !== undefined && t.pnl < 0)
-        .sort((a, b) => {
-          const aTime = a.closedAt ? new Date(a.closedAt).getTime() : 0;
-          const bTime = b.closedAt ? new Date(b.closedAt).getTime() : 0;
-          return bTime - aTime;
-        })[0];
 
-      if (lastLoss && lastLoss.closedAt && (Date.now() - new Date(lastLoss.closedAt).getTime() < rules.lossCooldownMs)) {
-        addLog('INFO', `${opportunity.symbol}: Em cooldown após loss`);
-        return null;
-      }
-    }
-
-    // Rate limit check: orders per minute
-    const oneMinuteAgo = Date.now() - 60000;
-    const ordersInLastMinute = orderTimestampsRef.current.filter(ts => ts > oneMinuteAgo).length;
-    if (ordersInLastMinute >= rules.maxOrdersPerMinute) {
-      addLog('WARN', `⚠️ Limite de ${rules.maxOrdersPerMinute} ordens/min atingido`);
-      return null;
-    }
-
-    // Only execute BUY or SELL signals
     if (opportunity.recommendation !== 'BUY' && opportunity.recommendation !== 'SELL') {
       return null;
     }
 
-    // Check if we already have an open trade for this symbol
     const existingTrade = currentOpenTrades.find(t => t.symbol === opportunity.symbol && t.status === 'OPEN');
     if (existingTrade) {
       addLog('INFO', `${opportunity.symbol}: Já existe trade aberto para este par`);
@@ -813,23 +285,16 @@ export const useAutonomousBot = ({
     const bybitSide: 'Buy' | 'Sell' = opportunity.recommendation === 'BUY' ? 'Buy' : 'Sell';
     const isLong = bybitSide === 'Buy';
 
-    // Calculate position size based on allocated capital OR risk management
     let capitalToUse: number;
     if (allocatedCapitalForTrade && allocatedCapitalForTrade > 0) {
-      // Use fractioned capital allocation
       capitalToUse = allocatedCapitalForTrade;
       addLog('AI', `💰 ${opportunity.symbol}: Usando capital fracionado de $${capitalToUse.toFixed(2)}`);
     } else {
-      // Fallback to risk-based calculation
       capitalToUse = (accountBalance * rules.riskPerTradePercent) / 100;
     }
 
-    const stopDistance = Math.abs(opportunity.entryPrice - opportunity.stopLoss);
-    
-    // Calculate quantity based on capital and price
     let quantity = opportunity.entryPrice > 0 ? capitalToUse / opportunity.entryPrice : 0;
 
-    // Minimum quantity requirements per symbol (Bybit linear perpetuals)
     const minQtyBySymbol: Record<string, number> = {
       'BTCUSDT': 0.001,
       'ETHUSDT': 0.01,
@@ -845,18 +310,13 @@ export const useAutonomousBot = ({
     };
     
     const minQtyForSymbol = minQtyBySymbol[opportunity.symbol] || 0.001;
-
-    // Bybit typically enforces a minimum notional (ex: 5 USDT)
     const minNotionalUSDT = 5;
     const minQtyForNotional = opportunity.entryPrice > 0 ? minNotionalUSDT / opportunity.entryPrice : 0;
-    
-    // Use the larger of the two minimums
     const effectiveMinQty = Math.max(minQtyForSymbol, minQtyForNotional);
 
     if (quantity < effectiveMinQty) {
       const valueAtMinQty = effectiveMinQty * opportunity.entryPrice;
       if (valueAtMinQty > capitalToUse * 2) {
-        // Allow some flexibility but not too much
         addLog('WARN', `⚠️ ${opportunity.symbol}: Capital insuficiente ($${capitalToUse.toFixed(2)}) para mínimo de ${effectiveMinQty} contratos (~$${valueAtMinQty.toFixed(2)})`);
         return null;
       }
@@ -864,12 +324,10 @@ export const useAutonomousBot = ({
       addLog('INFO', `${opportunity.symbol}: Ajustando para quantidade mínima ${effectiveMinQty}`);
     }
 
-    // Round to appropriate decimal places based on symbol
     const qtyDecimals = opportunity.symbol === 'BTCUSDT' ? 3 : 
                         ['ETHUSDT', 'BNBUSDT'].includes(opportunity.symbol) ? 2 : 1;
     quantity = parseFloat(quantity.toFixed(qtyDecimals));
 
-    // Validate TP/SL direction (avoid Bybit rejection). If invalid, omit the field.
     const slValid = isLong ? opportunity.stopLoss < opportunity.entryPrice : opportunity.stopLoss > opportunity.entryPrice;
     const tpValid = isLong ? opportunity.takeProfit > opportunity.entryPrice : opportunity.takeProfit < opportunity.entryPrice;
 
@@ -886,7 +344,6 @@ export const useAutonomousBot = ({
     if (!slValid) addLog('WARN', `⚠️ ${opportunity.symbol}: StopLoss inválido para ${isLong ? 'LONG' : 'SHORT'}; enviando ordem sem SL`);
     if (!tpValid) addLog('WARN', `⚠️ ${opportunity.symbol}: TakeProfit inválido para ${isLong ? 'LONG' : 'SHORT'}; enviando ordem sem TP`);
 
-    // If sendRealOrders is enabled, execute real order on Bybit
     let bybitOrderId: string | null = null;
     if (sendRealOrders) {
       addLog('AI', `📤 Enviando ordem real para Bybit: ${bybitSide} ${opportunity.symbol} (qty=${quantity})`);
@@ -934,7 +391,6 @@ export const useAutonomousBot = ({
       aiReasoning: opportunity.reasoning,
     };
 
-    // Track allocated capital
     const tradeValue = quantity * opportunity.entryPrice;
     setAllocatedCapital(prev => prev + tradeValue);
     
@@ -942,9 +398,7 @@ export const useAutonomousBot = ({
     setLastTradeTime(Date.now());
     setTradesToday(prev => prev + 1);
     
-    // Rate limiting: log order timestamp
     orderTimestampsRef.current.push(Date.now());
-    
     onTradeOpened?.(trade);
 
     const decision: AIDecision = {
@@ -970,12 +424,11 @@ export const useAutonomousBot = ({
     toast.success(`Trade executado: ${side} ${opportunity.symbol} (${opportunity.confidence}%)${sendRealOrders ? ' - ORDEM REAL' : ''}`);
 
     return trade;
-  }, [canTrade, rules, activeTrades, closedTrades, accountBalance, onTradeOpened, onDecisionMade, addLog, sendRealOrders, leverage, bybitAPI]);
+  }, [canTrade, rules, currentOpenTrades, accountBalance, onTradeOpened, onDecisionMade, addLog, sendRealOrders, leverage, bybitAPI]);
 
   const runAnalysisCycle = useCallback(async () => {
     if (!isRunningRef.current) return;
 
-    // Check if trading is allowed before analyzing
     const tradingCheck = canTrade();
     if (!tradingCheck.allowed) {
       addLog('WARN', `⚠️ Ciclo pausado: ${tradingCheck.reason}`);
@@ -985,10 +438,8 @@ export const useAutonomousBot = ({
     const analysis = await analyzeAllPairs();
     
     if (analysis?.bestOpportunities?.length > 0) {
-      // Log all opportunities for transparency
       addLog('INFO', `📊 Analisando ${analysis.bestOpportunities.length} oportunidades encontradas...`);
       
-      // Log why opportunities are rejected
       const rejectedOpps = analysis.bestOpportunities.filter(o => 
         o.confidence < rules.minConfidence || 
         o.score < rules.minScore ||
@@ -998,27 +449,20 @@ export const useAutonomousBot = ({
       if (rejectedOpps.length > 0) {
         rejectedOpps.forEach(o => {
           const reasons: string[] = [];
-          if (o.confidence < rules.minConfidence) {
-            reasons.push(`conf ${o.confidence}% < ${rules.minConfidence}%`);
-          }
-          if (o.score < rules.minScore) {
-            reasons.push(`score ${o.score} < ${rules.minScore}`);
-          }
-          if (o.recommendation !== 'BUY' && o.recommendation !== 'SELL') {
-            reasons.push(`sinal: ${o.recommendation}`);
-          }
+          if (o.confidence < rules.minConfidence) reasons.push(`conf ${o.confidence}% < ${rules.minConfidence}%`);
+          if (o.score < rules.minScore) reasons.push(`score ${o.score} < ${rules.minScore}`);
+          if (o.recommendation !== 'BUY' && o.recommendation !== 'SELL') reasons.push(`sinal: ${o.recommendation}`);
           addLog('INFO', `⏸️ ${o.symbol}: ${reasons.join(' | ')}`);
         });
       }
       
-      // Filter valid opportunities
       const validOpportunities = analysis.bestOpportunities
         .filter(o => 
           o.confidence >= rules.minConfidence && 
           o.score >= rules.minScore &&
           (o.recommendation === 'BUY' || o.recommendation === 'SELL')
         )
-        .sort((a, b) => (b.confidence * b.score) - (a.confidence * a.score)); // Sort by combined metric
+        .sort((a, b) => (b.confidence * b.score) - (a.confidence * a.score));
 
       addLog('AI', `📈 ${validOpportunities.length} oportunidades válidas (conf >= ${rules.minConfidence}%, score >= ${rules.minScore})`);
 
@@ -1027,11 +471,9 @@ export const useAutonomousBot = ({
         return;
       }
 
-      // Calculate intelligent capital allocation across opportunities
       addLog('AI', `🎯 Fracionando capital entre ${validOpportunities.length} melhores entradas...`);
-      const capitalAllocation = calculateCapitalAllocation(validOpportunities);
+      const capitalAllocation = calculateCapitalAllocation(validOpportunities, allocatedCapital);
 
-      // Execute trades with allocated capital
       let tradesExecuted = 0;
       for (const opp of validOpportunities) {
         const stillCanTrade = canTrade();
@@ -1052,7 +494,6 @@ export const useAutonomousBot = ({
           tradesExecuted++;
         }
         
-        // Small delay between executions to avoid overwhelming
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
@@ -1062,7 +503,7 @@ export const useAutonomousBot = ({
     } else {
       addLog('INFO', '🔍 Nenhuma oportunidade encontrada neste ciclo');
     }
-  }, [analyzeAllPairs, executeOpportunity, canTrade, rules, addLog, calculateCapitalAllocation]);
+  }, [analyzeAllPairs, executeOpportunity, canTrade, rules, addLog, calculateCapitalAllocation, allocatedCapital]);
 
   const start = useCallback(() => {
     if (isRunning) return;
@@ -1077,10 +518,7 @@ export const useAutonomousBot = ({
     addLog('INFO', `💰 Alocação: ${rules.capitalAllocationMode} | Max ${rules.maxCapitalPercentPerTrade}% por trade | Reserva ${rules.reserveCapitalPercent}%`);
     toast.success('Bot autônomo ativado - executando trades automaticamente');
 
-    // Run immediately
     runAnalysisCycle();
-
-    // Set up interval
     intervalRef.current = setInterval(runAnalysisCycle, intervalMs);
   }, [isRunning, intervalMs, runAnalysisCycle, rules, addLog]);
 
@@ -1115,7 +553,6 @@ export const useAutonomousBot = ({
     return result;
   }, [analyzeAllPairs]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (intervalRef.current) {
@@ -1129,10 +566,10 @@ export const useAutonomousBot = ({
     isAnalyzing,
     lastAnalysis,
     opportunities,
-    openTrades,
+    openTrades: currentOpenTrades,
     error,
     allocatedCapital,
-    availableCapital: getAvailableCapital(),
+    availableCapital: accountBalance - allocatedCapital, // Simple fallback calculation
     start,
     stop,
     toggle,
