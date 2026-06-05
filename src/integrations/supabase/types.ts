@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      bot_logs: {
+        Row: {
+          id: string
+          user_id: string
+          timestamp: string
+          level: string
+          message: string
+          details: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          timestamp?: string
+          level: string
+          message: string
+          details?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          timestamp?: string
+          level?: string
+          message?: string
+          details?: Json | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       bot_stats: {
         Row: {
           daily_pnl: number | null

@@ -10,6 +10,7 @@ import {
   type TechnicalIndicatorsPayload
 } from '@/hooks/useLocalTechnicalAnalysis';
 import { useBotRisk, type TradingRules } from '@/hooks/useBotRisk';
+import { useBotLogs } from '@/hooks/useBotLogs';
 
 export interface UseAutonomousBotOptions {
   marketData: Record<string, MarketData>;
@@ -86,6 +87,8 @@ export const useAutonomousBot = ({
 
   const currentOpenTrades = activeTrades || openTrades;
 
+  const { writeLog } = useBotLogs();
+
   const addLog = useCallback((level: LogEntry['level'], message: string) => {
     const log: LogEntry = {
       id: crypto.randomUUID(),
@@ -94,7 +97,10 @@ export const useAutonomousBot = ({
       message,
     };
     onLog?.(log);
-  }, [onLog]);
+    
+    // Persist bot logs to Supabase in background
+    writeLog(level, message);
+  }, [onLog, writeLog]);
 
   // Instantiate Sub-Hooks
   const { performLocalAnalysis } = useLocalTechnicalAnalysis();

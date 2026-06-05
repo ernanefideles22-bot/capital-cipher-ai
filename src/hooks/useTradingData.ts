@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Trade, MarketData, BotStats, AIDecision, LogEntry, BotConfig } from '@/types/trading';
 import { useWebSocket, WebSocketMessage } from './useWebSocket';
 import { useTradingSimulation, TRADING_PAIRS } from './useTradingSimulation';
+import { wsMarketDataSchema, wsBotStatsSchema, wsTradeSchema, wsLogSchema, wsAIDecisionSchema } from '@/lib/validations';
 
 export { setVoiceAlertCallbacks } from './useTradingSimulation';
 
@@ -80,60 +81,81 @@ export const useTradingData = (options: UseTradingDataOptions = {}) => {
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
     const { type, data } = message;
 
+    if (!data) return;
+
     switch (type) {
-      case 'market_data':
+      case 'market_data': {
+        const parsed = wsMarketDataSchema.safeParse(data);
+        if (!parsed.success) {
+          console.warn('Invalid market_data WS message:', parsed.error.format());
+          return;
+        }
+        const validatedData = parsed.data;
         setMarketData(prev => ({
           ...prev,
-          [data.symbol]: {
-            symbol: data.symbol,
-            price: data.price,
-            change24h: data.change_24h || 0,
-            changePercentage24h: data.change_percentage_24h || 0,
-            high24h: data.high_24h || data.price,
-            low24h: data.low_24h || data.price,
-            volume24h: data.volume_24h || 0,
-            timestamp: data.timestamp || Date.now(),
+          [validatedData.symbol]: {
+            symbol: validatedData.symbol,
+            price: validatedData.price,
+            change24h: validatedData.change_24h,
+            changePercentage24h: validatedData.change_percentage_24h,
+            high24h: validatedData.high_24h || validatedData.price,
+            low24h: validatedData.low_24h || validatedData.price,
+            volume24h: validatedData.volume_24h,
+            timestamp: validatedData.timestamp,
           },
         }));
         break;
+      }
 
-      case 'bot_stats':
+      case 'bot_stats': {
+        const parsed = wsBotStatsSchema.safeParse(data);
+        if (!parsed.success) {
+          console.warn('Invalid bot_stats WS message:', parsed.error.format());
+          return;
+        }
+        const validatedData = parsed.data;
         setBotStats({
-          status: data.status?.toUpperCase() || 'PAUSED',
-          totalTrades: data.total_trades || 0,
-          winRate: data.win_rate || 0,
-          totalPnL: data.total_pnl || 0,
-          dailyPnL: data.daily_pnl || 0,
-          weeklyPnL: data.weekly_pnl || 0,
-          monthlyPnL: data.monthly_pnl || 0,
-          currentDrawdown: data.current_drawdown || 0,
-          maxDrawdown: data.max_drawdown || 10,
-          sharpeRatio: data.sharpe_ratio || 0,
-          profitFactor: data.profit_factor || 0,
+          status: validatedData.status,
+          totalTrades: validatedData.total_trades,
+          winRate: validatedData.win_rate,
+          totalPnL: validatedData.total_pnl,
+          dailyPnL: validatedData.daily_pnl,
+          weeklyPnL: validatedData.weekly_pnl,
+          monthlyPnL: validatedData.monthly_pnl,
+          currentDrawdown: validatedData.current_drawdown,
+          maxDrawdown: validatedData.max_drawdown,
+          sharpeRatio: validatedData.sharpe_ratio,
+          profitFactor: validatedData.profit_factor,
         });
         break;
+      }
 
-      case 'trade':
+      case 'trade': {
+        const parsed = wsTradeSchema.safeParse(data);
+        if (!parsed.success) {
+          console.warn('Invalid trade WS message:', parsed.error.format());
+          return;
+        }
+        const validatedData = parsed.data;
         setTrades(prev => {
           const newTrade: Trade = {
-            id: data.id || crypto.randomUUID(),
-            symbol: data.symbol,
-            side: data.side?.toUpperCase() === 'BUY' ? 'LONG' : 'SHORT',
-            strategy: data.strategy?.toUpperCase() || 'SCALP',
-            entryPrice: data.entry_price,
-            exitPrice: data.exit_price,
-            quantity: data.quantity,
-            leverage: data.leverage || 1,
-            stopLoss: data.stop_loss,
-            takeProfit: data.take_profit,
-            pnl: data.pnl || 0,
-            pnlPercentage: data.pnl_percentage || 0,
-            status: data.status?.toUpperCase() || 'OPEN',
-            openedAt: new Date(data.opened_at || Date.now()),
-            closedAt: data.closed_at ? new Date(data.closed_at) : undefined,
+            id: validatedData.id,
+            symbol: validatedData.symbol,
+            side: validatedData.side,
+            strategy: validatedData.strategy,
+            entryPrice: validatedData.entry_price,
+            exitPrice: validatedData.exit_price,
+            quantity: validatedData.quantity,
+            leverage: validatedData.leverage,
+            stopLoss: validatedData.stop_loss,
+            takeProfit: validatedData.take_profit,
+            pnl: validatedData.pnl,
+            pnlPercentage: validatedData.pnl_percentage,
+            status: validatedData.status,
+            openedAt: new Date(validatedData.opened_at),
+            closedAt: validatedData.closed_at ? new Date(validatedData.closed_at) : undefined,
           };
           
-          // Update existing trade or add new
           const existingIndex = prev.findIndex(t => t.id === newTrade.id);
           if (existingIndex >= 0) {
             const updated = [...prev];
@@ -143,32 +165,47 @@ export const useTradingData = (options: UseTradingDataOptions = {}) => {
           return [newTrade, ...prev.slice(0, 49)];
         });
         break;
+      }
 
-      case 'log':
+      case 'log': {
+        const parsed = wsLogSchema.safeParse(data);
+        if (!parsed.success) {
+          console.warn('Invalid log WS message:', parsed.error.format());
+          return;
+        }
+        const validatedData = parsed.data;
         setLogs(prev => [{
           id: crypto.randomUUID(),
-          timestamp: new Date(data.timestamp || Date.now()),
-          level: data.level?.toUpperCase() || 'INFO',
-          message: data.message,
+          timestamp: new Date(validatedData.timestamp),
+          level: validatedData.level,
+          message: validatedData.message,
         }, ...prev.slice(0, 99)]);
         break;
+      }
 
-      case 'ai_decision':
+      case 'ai_decision': {
+        const parsed = wsAIDecisionSchema.safeParse(data);
+        if (!parsed.success) {
+          console.warn('Invalid ai_decision WS message:', parsed.error.format());
+          return;
+        }
+        const validatedData = parsed.data;
         setAIDecisions(prev => [{
           id: crypto.randomUUID(),
-          timestamp: new Date(data.timestamp || Date.now()),
-          symbol: data.symbol,
-          action: data.action?.toUpperCase() || 'HOLD',
-          confidence: data.confidence || 0,
-          reasoning: data.reasoning || '',
+          timestamp: new Date(validatedData.timestamp),
+          symbol: validatedData.symbol,
+          action: validatedData.action,
+          confidence: validatedData.confidence,
+          reasoning: validatedData.reasoning,
           indicators: {
-            institutionalFlow: data.institutional_flow || 0,
-            volumeCluster: data.volume_cluster || false,
-            trendStrength: data.trend_strength || 0,
-            riskScore: data.risk_score || 0,
+            institutionalFlow: validatedData.institutional_flow,
+            volumeCluster: validatedData.volume_cluster,
+            trendStrength: validatedData.trend_strength,
+            riskScore: validatedData.risk_score,
           },
         }, ...prev.slice(0, 9)]);
         break;
+      }
 
       case 'config':
         setConfig({
@@ -183,41 +220,52 @@ export const useTradingData = (options: UseTradingDataOptions = {}) => {
         break;
 
       case 'full_state':
-        // Handle initial full state sync
         if (data.market_data) {
           const newMarketData: Record<string, MarketData> = {};
           Object.entries(data.market_data).forEach(([symbol, md]: [string, any]) => {
-            newMarketData[symbol] = {
-              symbol,
-              price: md.price,
-              change24h: md.change_24h || 0,
-              changePercentage24h: md.change_percentage_24h || 0,
-              high24h: md.high_24h || md.price,
-              low24h: md.low_24h || md.price,
-              volume24h: md.volume_24h || 0,
-              timestamp: md.timestamp || Date.now(),
-            };
+            const parsed = wsMarketDataSchema.safeParse({ ...md, symbol });
+            if (parsed.success) {
+              const validatedData = parsed.data;
+              newMarketData[symbol] = {
+                symbol,
+                price: validatedData.price,
+                change24h: validatedData.change_24h,
+                changePercentage24h: validatedData.change_percentage_24h,
+                high24h: validatedData.high_24h || validatedData.price,
+                low24h: validatedData.low_24h || validatedData.price,
+                volume24h: validatedData.volume_24h,
+                timestamp: validatedData.timestamp,
+              };
+            }
           });
           setMarketData(newMarketData);
         }
-        if (data.trades) {
-          setTrades(data.trades.map((t: any) => ({
-            id: t.id || crypto.randomUUID(),
-            symbol: t.symbol,
-            side: t.side?.toUpperCase() === 'BUY' ? 'LONG' : 'SHORT',
-            strategy: t.strategy?.toUpperCase() || 'SCALP',
-            entryPrice: t.entry_price,
-            exitPrice: t.exit_price,
-            quantity: t.quantity,
-            leverage: t.leverage || 1,
-            stopLoss: t.stop_loss,
-            takeProfit: t.take_profit,
-            pnl: t.pnl || 0,
-            pnlPercentage: t.pnl_percentage || 0,
-            status: t.status?.toUpperCase() || 'OPEN',
-            openedAt: new Date(t.opened_at || Date.now()),
-            closedAt: t.closed_at ? new Date(t.closed_at) : undefined,
-          })));
+        if (data.trades && Array.isArray(data.trades)) {
+          const validatedTrades: Trade[] = [];
+          data.trades.forEach((t: any) => {
+            const parsed = wsTradeSchema.safeParse(t);
+            if (parsed.success) {
+              const validatedData = parsed.data;
+              validatedTrades.push({
+                id: validatedData.id,
+                symbol: validatedData.symbol,
+                side: validatedData.side,
+                strategy: validatedData.strategy,
+                entryPrice: validatedData.entry_price,
+                exitPrice: validatedData.exit_price,
+                quantity: validatedData.quantity,
+                leverage: validatedData.leverage,
+                stopLoss: validatedData.stop_loss,
+                takeProfit: validatedData.take_profit,
+                pnl: validatedData.pnl,
+                pnlPercentage: validatedData.pnl_percentage,
+                status: validatedData.status,
+                openedAt: new Date(validatedData.opened_at),
+                closedAt: validatedData.closed_at ? new Date(validatedData.closed_at) : undefined,
+              });
+            }
+          });
+          setTrades(validatedTrades);
         }
         break;
     }
