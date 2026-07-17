@@ -100,7 +100,7 @@ export function useBotConfig(): UseBotConfigReturn {
 
   // Save config to database
   const updateConfig = useCallback(async (newConfig: Partial<BotConfig>) => {
-    const updatedConfig: BotConfig = { ...config, ...newConfig, mode: 'paper' };
+    const updatedConfig = { ...config, ...newConfig, mode: 'paper' as const };
     
     // Update local state immediately
     setConfig(updatedConfig);
