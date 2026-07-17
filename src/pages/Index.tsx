@@ -165,7 +165,7 @@ const Index = () => {
       maxDrawdownPercent: config.maxDrawdown,
       riskPerTradePercent: config.riskPerTrade,
     },
-    sendRealOrders: isRealMode, // Send real orders when in real mode
+    sendRealOrders: false, // Legacy live execution is frozen; PAPER only.
     leverage: config.leverage,
     activeTrades: isRealMode ? positions.map(p => ({ symbol: p.symbol, status: 'OPEN' })) : trades.filter(t => t.status === 'OPEN'),
     closedTrades: trades.filter(t => t.status === 'CLOSED'),

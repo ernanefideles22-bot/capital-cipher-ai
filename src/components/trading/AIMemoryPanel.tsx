@@ -283,11 +283,6 @@ export const AIMemoryPanel = ({ isRealMode = false }: AIMemoryPanelProps) => {
   const evolution = useMemo(() => generateEvolution(), []);
   const stats = useMemo(() => generateMemoryStats(), []);
 
-  // Hide panel in real mode - AI uses demo memories internally but doesn't show them
-  if (isRealMode) {
-    return null;
-  }
-
   const categoryColors = {
     bullish: 'text-profit border-profit/50 bg-profit/10',
     bearish: 'text-loss border-loss/50 bg-loss/10',
@@ -312,6 +307,12 @@ export const AIMemoryPanel = ({ isRealMode = false }: AIMemoryPanelProps) => {
       detections: p.timesDetected,
     }))
   , [patterns]);
+
+  // Keep hooks unconditional even though the frozen legacy app never enters
+  // real mode.
+  if (isRealMode) {
+    return null;
+  }
 
   return (
     <Card className="glass-card">

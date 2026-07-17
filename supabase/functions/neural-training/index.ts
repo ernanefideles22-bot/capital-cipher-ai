@@ -184,11 +184,12 @@ serve(async (req) => {
 
     if (action === "train") {
       // Get current neural state
-      let { data: neuralState, error: stateError } = await supabase
+      const { data: initialNeuralState, error: stateError } = await supabase
         .from("neural_network_state")
         .select("*")
         .eq("user_id", user.id)
         .single();
+      let neuralState = initialNeuralState;
 
       // Create initial state if not exists
       if (!neuralState) {

@@ -8,41 +8,19 @@ Este diretório contém as **Edge Functions** (serverless Deno runtimes) que lid
 
 | Função | Descrição | Nível de Acesso |
 |--------|-----------|-----------------|
-| [**`bybit-api`**](./bybit-api) | Proxy seguro e mecanismo de controle de risco para ordens de trading na Bybit. | Autenticado (JWT do usuário) |
+| [**`bybit-api`**](./bybit-api) | Endpoint legado congelado. Retorna HTTP 410 e não acessa exchanges. | Autenticado (JWT do usuário) |
 | [**`elevenlabs-tts`**](./elevenlabs-tts) | Conversão de texto para voz (Text-to-Speech) para alertas e avisos do painel. | Autenticado (JWT do usuário) |
 | [**`market-analysis`**](./market-analysis) | Processa indicadores técnicos clássicos de mercado (RSI, EMA, Bollinger, MACD). | Autenticado (JWT do usuário) |
 | [**`multi-pair-analysis`**](./multi-pair-analysis) | Escaneia múltiplos pares em busca de melhores oportunidades de trade sincronizadas. | Autenticado (JWT do usuário) |
 | [**`neural-training`**](./neural-training) | Treina a rede neural do robô com base em experiências e histórico de trades passados. | Autenticado (JWT do usuário) |
-| [**`trading-ai`**](./trading-ai) | Cérebro de IA do robô. Toma decisões (`BUY`/`SELL`/`HOLD`) com base em indicadores. | Autenticado (JWT do usuário) |
+| [**`trading-ai`**](./trading-ai) | Endpoint legado congelado. Retorna HTTP 410 e não analisa nem executa operações. | Autenticado (JWT do usuário) |
 
 ---
 
 ## 🛠️ Detalhes das Funções
 
 ### 1. `bybit-api`
-Responsável por fazer a ponte entre o frontend e a Bybit, funcionando como o **Risk Engine** principal. Nenhuma ordem vai para a Bybit sem passar pelas validações server-side desta função.
-
-- **Método**: `POST`
-- **Headers**:
-  - `Authorization: Bearer <USER_JWT>`
-- **Payload de Entrada**:
-  ```json
-  {
-    "action": "placeOrder" | "cancelOrder" | "setLeverage" | "closePosition",
-    "symbol": "BTCUSDT",
-    "side": "BUY" | "SELL",
-    "quantity": 0.05,
-    "leverage": 5,
-    "stopLoss": 92000.0,
-    "takeProfit": 98000.0,
-    "orderId": "opcional-para-cancelamento"
-  }
-  ```
-- **Fluxo de Segurança**:
-  1. Valida o JWT do usuário e carrega o perfil do banco.
-  2. Verifica se o robô está configurado como `live` (se estiver como `paper`, rejeita e executa no simulador).
-  3. Verifica se o drawdown atual ou perda diária ultrapassaram os limites definidos em `profiles.bot_config`.
-  4. Executa a ordem na Bybit utilizando as chaves seguras do banco.
+Endpoint desativado. Qualquer requisição autenticada recebe HTTP 410 com o código `LEGACY_EXCHANGE_ACCESS_FROZEN`. O código não lê credenciais, não consulta contas e não envia ordens.
 
 ---
 
@@ -119,27 +97,9 @@ Mecanismo de Backprop / Otimização da IA. Carrega as experiências salvas em `
 ---
 
 ### 6. `trading-ai`
-Recebe dados analíticos do mercado e executa inferência sobre os pesos atuais do modelo do usuário para emitir uma recomendação formal de trade autônomo.
-
-- **Método**: `POST`
-- **Payload de Entrada**:
-  ```json
-  {
-    "symbol": "SOLUSDT",
-    "marketData": { "price": 180.5, "change24h": 2.5 },
-    "indicators": { "rsi": 72.0, "volume": 120000.0 }
-  }
-  ```
-- **Resposta**:
-  ```json
-  {
-    "decision": "BUY" | "SELL" | "HOLD" | "SKIP",
-    "confidence": 88.5,
-    "reasoning": "Forte rejeição no suporte combinado com fluxo comprador crescente e Stoch RSI ascendente."
-  }
-  ```
+Endpoint desativado. Qualquer requisição autenticada recebe HTTP 410 com o código `LEGACY_TRADING_FROZEN`. O código não chama modelos de IA, não lê posições e não envia ordens.
 
 ---
 
 ## 🔒 Segurança e CORS
-Todas as Edge Functions possuem cabeçalhos CORS restritivos. Elas respondem apenas a requisições autenticadas (exceto a requisição prévia de voo `OPTIONS`) e exigem um cabeçalho de autenticação válido com token JWT válido emitido pelo Supabase Auth.
+Todas as Edge Functions exigem validação JWT no gateway conforme `supabase/config.toml`. O congelamento só estará ativo no ambiente hospedado depois da implantação das funções e da revogação das credenciais históricas.
