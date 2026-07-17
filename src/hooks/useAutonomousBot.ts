@@ -26,7 +26,6 @@ export interface UseAutonomousBotOptions {
   dailyPnL?: number;
   accountBalance?: number;
   tradingRules?: Partial<TradingRules>;
-  sendRealOrders?: boolean;
   leverage?: number;
   activeTrades?: Array<{ symbol: string; status?: string }>;
   closedTrades?: Trade[];

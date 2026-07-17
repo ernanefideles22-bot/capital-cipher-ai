@@ -2,11 +2,11 @@
 
 Capital Cipher AI é o protótipo legado de dashboard do projeto. O código útil está sendo migrado para o `capital-cipher-platform`, que é a implementação ativa e opera somente em modo PAPER.
 
-> CONGELAMENTO DE SEGURANÇA: execução real, acesso privado à exchange e `trading-ai` estão desativados neste repositório. Não configure credenciais de exchange.
+> CONGELAMENTO DE SEGURANÇA: execução real, acesso privado à exchange e todas as Edge Functions estão desativados neste repositório. Não configure credenciais de provedores.
 
 ## Status do projeto
 
-Estado atual: legado congelado e mantido temporariamente como fonte de componentes visuais. As Edge Functions `trading-ai` e `bybit-api` respondem com bloqueio permanente e o frontend não possui mais um cliente capaz de enviar ordens.
+Estado atual: legado congelado e mantido temporariamente como fonte de componentes visuais. Todas as Edge Functions respondem com bloqueio permanente, o banco possui uma migração final de endurecimento RLS e o frontend não possui mais um cliente capaz de enviar ordens.
 
 Consulte [`SECURITY_FREEZE.md`](./SECURITY_FREEZE.md) para os passos operacionais de implantação, rotação de credenciais e verificação.
 
