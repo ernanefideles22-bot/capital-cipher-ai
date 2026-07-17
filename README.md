@@ -1,14 +1,14 @@
 # Capital Cipher AI
 
-Capital Cipher AI é um dashboard web para análise, monitoramento e automação de trading cripto. O projeto usa React, Vite, TypeScript, Tailwind CSS, shadcn-ui, Supabase e integração com Bybit.
+Capital Cipher AI é o protótipo legado de dashboard do projeto. O código útil está sendo migrado para o `capital-cipher-platform`, que é a implementação ativa e opera somente em modo PAPER.
 
-> Aviso: este projeto envolve lógica de trading. Não use capital real antes de validar autenticação, chaves, limites de risco, execução de ordens, logs e comportamento em testnet/paper trading.
+> CONGELAMENTO DE SEGURANÇA: execução real, acesso privado à exchange e todas as Edge Functions estão desativados neste repositório. Não configure credenciais de provedores.
 
 ## Status do projeto
 
-Estado atual: protótipo funcional de frontend com recursos de dashboard, autenticação, modo demo e integração planejada/implementada com serviços externos.
+Estado atual: legado congelado e mantido temporariamente como fonte de componentes visuais. Todas as Edge Functions respondem com bloqueio permanente, o banco possui uma migração final de endurecimento RLS e o frontend não possui mais um cliente capaz de enviar ordens.
 
-Antes de produção, ainda é necessário endurecer a camada de segurança, principalmente qualquer fluxo que possa enviar ordens reais para exchange.
+Consulte [`SECURITY_FREEZE.md`](./SECURITY_FREEZE.md) para os passos operacionais de implantação, rotação de credenciais e verificação.
 
 ## Stack principal
 
@@ -32,9 +32,9 @@ Antes de produção, ainda é necessário endurecer a camada de segurança, prin
 - Visualização de preço e gráfico.
 - Painéis de performance, backtesting e configurações.
 - Modo demo com dados simulados.
-- Modo real conectado a dados/ações da Bybit, quando configurado.
-- Painéis para posições, ordens, logs, decisões de IA e oportunidades.
-- Estrutura para bot autônomo de trading.
+- Painéis legados para visualização, logs, decisões e oportunidades em simulação.
+- Dados públicos de mercado para referência visual.
+- Modo PAPER/DEMO sem acesso privado à exchange.
 
 ## Requisitos
 
@@ -79,8 +79,7 @@ Exemplo mínimo:
 ```env
 VITE_SUPABASE_URL=
 VITE_SUPABASE_PUBLISHABLE_KEY=
-VITE_ENABLE_REAL_TRADING=false
-VITE_DEFAULT_TRADING_MODE=demo
+VITE_DEFAULT_TRADING_MODE=paper
 ```
 
 Nunca coloque chaves secretas da Bybit ou de qualquer exchange no frontend. Chaves sensíveis devem ficar apenas em ambiente seguro de backend, como Supabase Edge Functions ou outro serviço server-side controlado.
@@ -91,32 +90,13 @@ Nunca coloque chaves secretas da Bybit ou de qualquer exchange no frontend. Chav
 
 Modo seguro para desenvolvimento visual e simulação. Deve ser o modo padrão.
 
-### Testnet / Paper trading
+### Paper trading
 
-Modo obrigatório antes de qualquer operação com dinheiro real. Use para validar ordens, stop loss, take profit, alavancagem, limites e falhas de API.
-
-### Real trading
-
-Modo de alto risco. Só deve ser habilitado após validação completa em testnet e com travas server-side.
-
-Requisitos mínimos antes de liberar real trading:
-
-- Flag explícita de ambiente para habilitar operação real.
-- Validação server-side de todas as ordens.
-- Whitelist de ações permitidas.
-- Limite de risco por trade.
-- Limite de drawdown diário.
-- Stop loss obrigatório.
-- Kill switch global.
-- Logs auditáveis de todas as ações.
-- Proteção contra ordens duplicadas.
-- Separação clara entre testnet e mainnet.
+É o único modo operacional permitido neste legado. Testnet e live serão implementados futuramente no `capital-cipher-platform`, depois do motor central de risco, OMS, reconciliação e auditoria.
 
 ## Segurança operacional
 
-O frontend não deve ser a autoridade de segurança. Qualquer regra crítica precisa ser validada no backend/Edge Function.
-
-Ações sensíveis, como `placeOrder`, `cancelOrder`, `setLeverage`, `closePosition` e `closeAllPositions`, devem passar por validação server-side antes de chegar na exchange.
+O frontend não é autoridade de segurança. Neste repositório, ações sensíveis retornam um bloqueio local e as Edge Functions correspondentes retornam HTTP 410. O bloqueio só estará completo no ambiente hospedado depois que as funções congeladas forem implantadas e as credenciais históricas forem revogadas.
 
 ## Deploy
 
@@ -131,12 +111,10 @@ npm run preview
 
 ## Próximos passos recomendados
 
-1. Criar `.env.example` seguro.
-2. Travar real trading por padrão no frontend.
-3. Auditar a Supabase Edge Function `bybit-api`.
-4. Criar risk engine server-side.
-5. Adicionar testes mínimos para impedir operação real acidental.
-6. Documentar deploy e operação por ambiente: demo, testnet e produção.
+1. Implantar as Edge Functions congeladas e validar HTTP 410.
+2. Revogar e rotacionar credenciais históricas de exchange.
+3. Migrar os componentes visuais aprovados para `capital-cipher-platform`.
+4. Arquivar este repositório quando os critérios de `SECURITY_FREEZE.md` forem atendidos.
 
 ## Licença
 

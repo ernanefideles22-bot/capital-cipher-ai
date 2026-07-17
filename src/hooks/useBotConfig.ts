@@ -77,7 +77,7 @@ export function useBotConfig(): UseBotConfigReturn {
       } else if (data?.bot_config) {
         const dbConfig = data.bot_config as Record<string, unknown>;
         setConfig({
-          mode: dbConfig.mode === 'paper' || dbConfig.mode === 'live' ? dbConfig.mode : DEFAULT_CONFIG.mode,
+          mode: 'paper',
           marketMode: dbConfig.marketMode === 'SPOT' || dbConfig.marketMode === 'FUTURES' ? dbConfig.marketMode : DEFAULT_CONFIG.marketMode,
           leverage: typeof dbConfig.leverage === 'number' ? dbConfig.leverage : DEFAULT_CONFIG.leverage,
           maxDrawdown: typeof dbConfig.maxDrawdown === 'number' ? dbConfig.maxDrawdown : DEFAULT_CONFIG.maxDrawdown,
@@ -100,7 +100,7 @@ export function useBotConfig(): UseBotConfigReturn {
 
   // Save config to database
   const updateConfig = useCallback(async (newConfig: Partial<BotConfig>) => {
-    const updatedConfig = { ...config, ...newConfig };
+    const updatedConfig = { ...config, ...newConfig, mode: 'paper' as const };
     
     // Update local state immediately
     setConfig(updatedConfig);

@@ -1,19 +1,19 @@
 project_id = "nrhdicsaqtjrrvlybfkl"
 
 [functions.bybit-api]
-verify_jwt = false
+verify_jwt = true
 
 [functions.market-analysis]
-verify_jwt = false
+verify_jwt = true
 
 [functions.multi-pair-analysis]
-verify_jwt = false
+verify_jwt = true
 
 [functions.trading-ai]
-verify_jwt = false
+verify_jwt = true
 
 [functions.neural-training]
-verify_jwt = false
+verify_jwt = true
 
 [functions.elevenlabs-tts]
-verify_jwt = false
+verify_jwt = true

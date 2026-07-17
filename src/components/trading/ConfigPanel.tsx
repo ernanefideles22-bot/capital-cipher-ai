@@ -53,36 +53,15 @@ export const ConfigPanel = ({ config, onUpdateConfig, saving = false }: ConfigPa
       </div>
 
       <div className="space-y-5">
-        {/* Mode Toggle */}
+        {/* Mode is intentionally immutable in the legacy application. */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-warning" />
-            <Label className="text-sm">Modo Real</Label>
+            <Label className="text-sm">Modo de execução</Label>
           </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                'text-xs font-medium',
-                draft.mode === 'paper' ? 'text-accent' : 'text-muted-foreground'
-              )}
-            >
-              Paper
-            </span>
-            <Switch
-              checked={draft.mode === 'live'}
-              onCheckedChange={(checked) =>
-                setDraft((prev) => ({ ...prev, mode: checked ? 'live' : 'paper' }))
-              }
-            />
-            <span
-              className={cn(
-                'text-xs font-medium',
-                draft.mode === 'live' ? 'text-warning' : 'text-muted-foreground'
-              )}
-            >
-              Live
-            </span>
-          </div>
+          <span className="rounded border border-accent/40 bg-accent/10 px-2 py-1 text-xs font-semibold text-accent">
+            PAPER — bloqueado
+          </span>
         </div>
 
         {/* Market Mode */}

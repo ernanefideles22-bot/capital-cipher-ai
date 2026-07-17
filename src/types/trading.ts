@@ -37,7 +37,7 @@ export interface MarketData {
 }
 
 export interface BotConfig {
-  mode: 'paper' | 'live';
+  mode: 'paper';
   marketMode: MarketMode;
   leverage: number;
   maxDrawdown: number;

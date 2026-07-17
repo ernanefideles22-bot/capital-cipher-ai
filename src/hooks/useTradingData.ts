@@ -44,7 +44,7 @@ export const useTradingData = (options: UseTradingDataOptions = {}) => {
       if (saved) {
         const parsed = JSON.parse(saved);
         return {
-          mode: parsed.mode === 'paper' || parsed.mode === 'live' ? parsed.mode : 'paper',
+          mode: 'paper',
           marketMode: parsed.marketMode === 'SPOT' || parsed.marketMode === 'FUTURES' ? parsed.marketMode : 'FUTURES',
           leverage: typeof parsed.leverage === 'number' ? parsed.leverage : 5,
           maxDrawdown: typeof parsed.maxDrawdown === 'number' ? parsed.maxDrawdown : 10,
@@ -209,7 +209,7 @@ export const useTradingData = (options: UseTradingDataOptions = {}) => {
 
       case 'config':
         setConfig({
-          mode: data.testnet ? 'paper' : 'live',
+          mode: 'paper',
           marketMode: data.market_mode?.toUpperCase() || 'FUTURES',
           leverage: data.default_leverage || 5,
           maxDrawdown: data.max_drawdown || 10,
@@ -341,14 +341,14 @@ export const useTradingData = (options: UseTradingDataOptions = {}) => {
 
   const updateConfig = useCallback((newConfig: Partial<BotConfig>) => {
     setConfig(prev => {
-      const updated = { ...prev, ...newConfig };
+      const updated: BotConfig = { ...prev, ...newConfig, mode: 'paper' };
 
       if (isConnected) {
         sendMessage({
           type: 'config_update',
           data: {
-            // testnet = true only when mode is paper
-            testnet: updated.mode === 'paper',
+            // Legacy transport remains isolated from mainnet.
+            testnet: true,
             market_mode: updated.marketMode.toLowerCase(),
             default_leverage: updated.leverage,
             max_drawdown: updated.maxDrawdown,

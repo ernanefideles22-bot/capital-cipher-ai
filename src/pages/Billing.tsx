@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
-import { usePlanPermissions } from '@/lib/permissions';
 import { createCheckoutSession, redirectToCheckout, createPortalSession } from '@/lib/stripe';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -54,7 +53,7 @@ const Billing = () => {
     setUpgrading(true);
     try {
       const result = await createCheckoutSession(
-        subscription.user_id,
+        subscription.userId,
         planType,
         'monthly'
       );
@@ -74,7 +73,7 @@ const Billing = () => {
   const handleManageBilling = async () => {
     setManagingBilling(true);
     try {
-      const result = await createPortalSession(subscription.user_id);
+    const result = await createPortalSession(subscription.userId);
 
       if ('url' in result) {
         window.open(result.url, '_blank');
@@ -90,8 +89,6 @@ const Billing = () => {
 
   const isTrialing = subscription.status === 'TRIAL';
   const currentPlan = usageStats.plan;
-  const permissions = usePlanPermissions(currentPlan, plans);
-
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-8">
@@ -156,8 +153,8 @@ const Billing = () => {
                   Período Atual
                 </p>
                 <p className="font-medium">
-                  {new Date(subscription.current_period_start).toLocaleDateString('pt-BR')} -{' '}
-                  {new Date(subscription.current_period_end).toLocaleDateString('pt-BR')}
+                  {new Date(subscription.currentPeriodStart).toLocaleDateString('pt-BR')} -{' '}
+                  {new Date(subscription.currentPeriodEnd).toLocaleDateString('pt-BR')}
                 </p>
               </div>
 
@@ -170,8 +167,8 @@ const Billing = () => {
 
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">Renovação automática</p>
-                <Badge variant={subscription.auto_renew ? 'default' : 'outline'}>
-                  {subscription.auto_renew ? 'Ativada' : 'Desativada'}
+                <Badge variant={subscription.autoRenew ? 'default' : 'outline'}>
+                  {subscription.autoRenew ? 'Ativada' : 'Desativada'}
                 </Badge>
               </div>
             </div>
@@ -199,7 +196,7 @@ const Billing = () => {
               </CardHeader>
               <CardContent className="space-y-2">
                 <p className="text-2xl font-bold">
-                  {usageStats.currentUsage?.connected_accounts_used || 0} /{' '}
+                  {usageStats.currentUsage?.connectedAccountsUsed || 0} /{' '}
                   {currentPlan.limits.maxConnectedAccounts}
                 </p>
                 <Progress
@@ -216,7 +213,7 @@ const Billing = () => {
               </CardHeader>
               <CardContent className="space-y-2">
                 <p className="text-2xl font-bold">
-                  {usageStats.currentUsage?.trading_bots_created || 0} /{' '}
+                  {usageStats.currentUsage?.tradingBotsCreated || 0} /{' '}
                   {currentPlan.limits.maxTradingBots}
                 </p>
                 <Progress
@@ -233,7 +230,7 @@ const Billing = () => {
               </CardHeader>
               <CardContent className="space-y-2">
                 <p className="text-2xl font-bold">
-                  {usageStats.currentUsage?.backtests_run || 0} /{' '}
+                  {usageStats.currentUsage?.backtestsRun || 0} /{' '}
                   {currentPlan.limits.maxBacktests}
                 </p>
                 <Progress
@@ -250,7 +247,7 @@ const Billing = () => {
               </CardHeader>
               <CardContent className="space-y-2">
                 <p className="text-2xl font-bold">
-                  {usageStats.currentUsage?.api_calls_made || 0} /{' '}
+                  {usageStats.currentUsage?.apiCallsMade || 0} /{' '}
                   {currentPlan.limits.apiCallsPerDay}
                 </p>
                 <Progress
@@ -267,7 +264,7 @@ const Billing = () => {
               </CardHeader>
               <CardContent className="space-y-2">
                 <p className="text-2xl font-bold">
-                  {Math.round((usageStats.currentUsage?.storage_used_mb || 0) / 1024)} /{' '}
+                  {Math.round((usageStats.currentUsage?.storageUsedMb || 0) / 1024)} /{' '}
                   {currentPlan.limits.storageGb} GB
                 </p>
                 <Progress
@@ -285,8 +282,6 @@ const Billing = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {plans.map((plan) => {
               const isCurrentPlan = plan.name === currentPlan.name;
-              const permissions_local = usePlanPermissions(plan, plans);
-
               return (
                 <Card
                   key={plan.id}

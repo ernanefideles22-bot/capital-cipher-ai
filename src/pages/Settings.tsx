@@ -1,16 +1,13 @@
 import { ArrowLeft, Settings2, Volume2, Cloud, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ConfigPanel } from '@/components/trading/ConfigPanel';
-import { BybitConnectionPanel } from '@/components/trading/BybitConnectionPanel';
 import { VoiceSettingsPanel } from '@/components/trading/VoiceSettingsPanel';
 import { useBotConfig } from '@/hooks/useBotConfig';
-import { useBybitAccount } from '@/hooks/useBybitAccount';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 const SettingsPage = () => {
   const navigate = useNavigate();
-  const { isRealMode } = useBybitAccount();
   const { config, loading, saving, updateConfig } = useBotConfig();
 
   return (
@@ -44,8 +41,8 @@ const SettingsPage = () => {
               <Cloud className="w-3 h-3" />
               Sync
             </Badge>
-            <Badge variant="outline" className={isRealMode ? 'border-profit text-profit' : 'border-warning text-warning'}>
-              {isRealMode ? '🟢 Conta Real' : '🟡 Modo Demo'}
+            <Badge variant="outline" className="border-warning text-warning">
+              PAPER — legado congelado
             </Badge>
           </div>
         </div>
@@ -76,13 +73,6 @@ const SettingsPage = () => {
           </div>
         </section>
 
-        {/* Bybit Connection */}
-        <section>
-          <h2 className="text-lg font-semibold mb-4">Conexão Bybit</h2>
-          <div className="max-w-xl">
-            <BybitConnectionPanel />
-          </div>
-        </section>
       </main>
     </div>
   );
